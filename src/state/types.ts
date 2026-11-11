@@ -90,6 +90,9 @@ export type PlayerState = {
     sfxVolume: number;
     haptics: boolean;
     showDangerTiles: boolean;
+    showGloomReach: boolean;
+    notifications: boolean;
+    language: string;
     starlightNotify: boolean;
   };
   eventBanner: string;
@@ -160,6 +163,9 @@ export function createInitialState(): PlayerState {
       sfxVolume: 80,
       haptics: true,
       showDangerTiles: true,
+      showGloomReach: true,
+      notifications: true,
+      language: 'en',
       starlightNotify: false,
     },
     eventBanner: '',

@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet } from 'react-native';
+import { GameModal } from '../components/GameModal';
 import { Screen } from '../components/Screen';
 import { BackRow, Body, Field, Panel, PrimaryButton, Title } from '../components/ui';
 import { getAllLevels } from '../data/levels';
@@ -11,6 +12,7 @@ export default function AdminScreen() {
   const { player, update } = usePlayer();
   const [banner, setBanner] = useState(player.eventBanner);
   const [mult, setMult] = useState(String(player.coinRewardMultiplier));
+  const [toast, setToast] = useState<{ title: string; body: string } | null>(null);
 
   return (
     <Screen scroll>
@@ -32,7 +34,7 @@ export default function AdminScreen() {
           style={{ marginTop: 10 }}
           onPress={() => {
             update((p) => ({ ...p, eventBanner: banner.trim() }));
-            Alert.alert('Saved', 'Event banner updated');
+            setToast({ title: 'Saved', body: 'Event banner updated' });
           }}
         />
       </Panel>
@@ -51,11 +53,11 @@ export default function AdminScreen() {
           onPress={() => {
             const n = Number(mult);
             if (!n || n <= 0) {
-              Alert.alert('Invalid', 'Enter a positive number');
+              setToast({ title: 'Invalid', body: 'Enter a positive number' });
               return;
             }
             update((p) => ({ ...p, coinRewardMultiplier: n }));
-            Alert.alert('Saved', `Multiplier set to ${n}`);
+            setToast({ title: 'Saved', body: `Multiplier set to ${n}` });
           }}
         />
       </Panel>
@@ -64,8 +66,7 @@ export default function AdminScreen() {
         <Title style={{ fontSize: 18, marginBottom: 8 }}>Unlock levels</Title>
         {getAllLevels().map((lvl) => {
           const unlocked =
-            player.unlockedLevels.includes(lvl.id) ||
-            player.forceUnlocked.includes(lvl.id);
+            player.unlockedLevels.includes(lvl.id) || player.forceUnlocked.includes(lvl.id);
           return (
             <Pressable
               key={lvl.id}
@@ -76,7 +77,6 @@ export default function AdminScreen() {
                   const unlockedSet = new Set(p.unlockedLevels);
                   if (force.has(lvl.id) || unlockedSet.has(lvl.id)) {
                     force.delete(lvl.id);
-                    // keep natural unlocks
                   } else {
                     force.add(lvl.id);
                     unlockedSet.add(lvl.id);
@@ -99,6 +99,14 @@ export default function AdminScreen() {
           );
         })}
       </Panel>
+
+      <GameModal
+        visible={!!toast}
+        title={toast?.title ?? ''}
+        body={toast?.body}
+        primaryLabel="OK"
+        onPrimary={() => setToast(null)}
+      />
     </Screen>
   );
 }

@@ -40,6 +40,9 @@ type Ctx = {
   achievementProgress: (id: string) => number;
   addCoins: (amount: number) => void;
   syncConsumables: (c: PlayerState['consumables']) => void;
+  resetPhoneSave: () => void;
+  dailyClaimable: boolean;
+  achievementClaimable: boolean;
 };
 
 const PlayerContext = createContext<Ctx | null>(null);
@@ -489,6 +492,20 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     [update]
   );
 
+  const resetPhoneSave = useCallback(() => {
+    const fresh = createInitialState();
+    setPlayer(fresh);
+    void savePlayer(fresh);
+  }, []);
+
+  const dailyClaimable = player.daily.lastClaimDate !== dayKey();
+
+  const achievementClaimable = ACHIEVEMENTS.some((a) => {
+    if (player.achievementsClaimed.includes(a.id)) return false;
+    const progress = achievementProgress(a.id);
+    return progress >= a.target;
+  });
+
   const claimAchievement = useCallback(
     (id: string) => {
       const a = ACHIEVEMENTS.find((x) => x.id === id);
@@ -558,6 +575,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       achievementProgress,
       addCoins,
       syncConsumables,
+      resetPhoneSave,
+      dailyClaimable,
+      achievementClaimable,
     }),
     [
       ready,
@@ -584,6 +604,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       achievementProgress,
       addCoins,
       syncConsumables,
+      resetPhoneSave,
+      dailyClaimable,
+      achievementClaimable,
     ]
   );
 

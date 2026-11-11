@@ -1,7 +1,9 @@
 import { router } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { GameModal } from '../components/GameModal';
 import { Screen } from '../components/Screen';
-import { BackRow, Body, Panel, Title } from '../components/ui';
+import { BackRow, Body, DangerButton, Panel, Title } from '../components/ui';
 import { usePlayer } from '../state/PlayerContext';
 import { colors } from '../theme/colors';
 
@@ -45,7 +47,11 @@ function VolumeSlider({
           <Pressable
             key={n}
             onPress={() => onChange(n)}
-            style={[styles.sliderTick, value >= n && styles.sliderTickOn, value === n && styles.sliderTickActive]}
+            style={[
+              styles.sliderTick,
+              value >= n && styles.sliderTickOn,
+              value === n && styles.sliderTickActive,
+            ]}
           >
             <Text style={styles.tickText}>{n}</Text>
           </Pressable>
@@ -55,9 +61,16 @@ function VolumeSlider({
   );
 }
 
+const LANGS = [
+  { id: 'en', label: 'English' },
+  { id: 'es', label: 'Español' },
+  { id: 'pt', label: 'Português' },
+];
+
 export default function SettingsScreen() {
-  const { player, update } = usePlayer();
+  const { player, update, resetPhoneSave } = usePlayer();
   const s = player.settings;
+  const [confirmReset, setConfirmReset] = useState(false);
 
   return (
     <Screen scroll>
@@ -88,10 +101,6 @@ export default function SettingsScreen() {
             }))
           }
         />
-      </Panel>
-
-      <Panel style={{ marginTop: 12 }}>
-        <Title style={{ fontSize: 20, marginBottom: 8 }}>Preferences</Title>
         <Toggle
           label="Sound master"
           value={s.sound}
@@ -99,17 +108,38 @@ export default function SettingsScreen() {
             update((p) => ({ ...p, settings: { ...p.settings, sound: !p.settings.sound } }))
           }
         />
+      </Panel>
+
+      <Panel style={{ marginTop: 12 }}>
+        <Title style={{ fontSize: 20, marginBottom: 8 }}>Preferences</Title>
         <Toggle
-          label="Show danger tiles"
-          value={s.showDangerTiles ?? true}
+          label="Notifications"
+          value={s.notifications ?? true}
           onToggle={() =>
             update((p) => ({
               ...p,
               settings: {
                 ...p.settings,
-                showDangerTiles: !(p.settings.showDangerTiles ?? true),
+                notifications: !(p.settings.notifications ?? true),
               },
             }))
+          }
+        />
+        <Toggle
+          label="Show gloom reach"
+          value={s.showGloomReach ?? s.showDangerTiles ?? true}
+          onToggle={() =>
+            update((p) => {
+              const next = !(p.settings.showGloomReach ?? p.settings.showDangerTiles ?? true);
+              return {
+                ...p,
+                settings: {
+                  ...p.settings,
+                  showGloomReach: next,
+                  showDangerTiles: next,
+                },
+              };
+            })
           }
         />
         <Toggle
@@ -142,10 +172,47 @@ export default function SettingsScreen() {
             }))
           }
         />
+
+        <Body style={{ marginTop: 8, marginBottom: 8 }}>Language</Body>
+        <View style={styles.langRow}>
+          {LANGS.map((l) => (
+            <Pressable
+              key={l.id}
+              onPress={() =>
+                update((p) => ({ ...p, settings: { ...p.settings, language: l.id } }))
+              }
+              style={[
+                styles.langChip,
+                (s.language ?? 'en') === l.id && styles.langChipOn,
+              ]}
+            >
+              <Text style={styles.langText}>{l.label}</Text>
+            </Pressable>
+          ))}
+        </View>
       </Panel>
-      <Body muted style={{ marginTop: 12 }}>
-        Cloud: {player.cloudStatus === 'synced' ? 'Synced' : 'Saved on this phone'}
-      </Body>
+
+      <Panel style={{ marginTop: 12 }}>
+        <Title style={{ fontSize: 20, marginBottom: 8 }}>Save data</Title>
+        <Body muted style={{ marginBottom: 10 }}>
+          Cloud: {player.cloudStatus === 'synced' ? 'Synced' : 'Saved on this phone'}
+        </Body>
+        <DangerButton label="Reset save on this phone" onPress={() => setConfirmReset(true)} />
+      </Panel>
+
+      <GameModal
+        visible={confirmReset}
+        title="Reset this phone?"
+        body="This clears progress, coins, and unlocks on this device. It cannot be undone."
+        primaryLabel="Reset everything"
+        onPrimary={() => {
+          setConfirmReset(false);
+          resetPhoneSave();
+          router.replace('/');
+        }}
+        secondaryLabel="Keep my save"
+        onSecondary={() => setConfirmReset(false)}
+      />
     </Screen>
   );
 }
@@ -194,4 +261,13 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 12,
   },
+  langRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  langChip: {
+    backgroundColor: colors.muted,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  langChipOn: { backgroundColor: colors.accent },
+  langText: { fontFamily: 'Fredoka_600SemiBold', color: colors.ink },
 });

@@ -1,13 +1,19 @@
-import React, { useEffect, useRef } from 'react';
-import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useRef } from 'react';
+import {
+  Animated,
+  Dimensions,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { Images } from '../data/assets';
 import { GLOOM_META } from '../data/levels';
 import { moveCost } from '../engine/board';
 import { GameState, Pos } from '../engine/types';
 import { usePlayer } from '../state/PlayerContext';
 import { colors } from '../theme/colors';
-
-const TILE = 40;
 
 function tileColor(kind: string, boardSkin: string) {
   const boards: Record<string, string> = {
@@ -22,21 +28,21 @@ function tileColor(kind: string, boardSkin: string) {
     case 'lava':
       return '#FF7A3C';
     case 'rock':
-      return '#8B8F98';
+      return '#A5ABB2';
     case 'gem':
       return '#FFD85C';
     case 'hazard':
-      return '#FF8A8A';
+      return '#FFC7BC';
     case 'sticky':
-      return '#FF9ECF';
+      return '#FF9ED2';
     case 'crumbly':
-      return '#E0A060';
+      return '#DDA467';
     case 'vanishing':
-      return '#C9E8FF';
+      return '#CFEFFF';
     case 'ice':
       return '#BDEEFF';
     case 'cracked':
-      return '#A8D4E8';
+      return '#D7EEF8';
     case 'bridgeClosed':
     case 'bridgeOpen':
       return '#A67C52';
@@ -45,75 +51,110 @@ function tileColor(kind: string, boardSkin: string) {
     case 'start':
       return '#63D66F';
     case 'switch':
-      return '#FFD85C';
+      return '#FFE08A';
     case 'teleport':
-      return '#C5A0FF';
+      return '#E3D4FF';
     case 'shortcut':
     case 'shortcutLand':
-      return '#FFC39A';
+      return '#FFE0B5';
     case 'mystery':
-      return '#B388FF';
+      return '#7C4DDB';
     case 'power':
-      return '#B388FF';
+      return '#8E5BE8';
     case 'shield':
-      return '#A9D2FF';
+      return '#CFE0FF';
     case 'reroll':
-      return '#9FE7F0';
+      return '#CDF3F7';
     case 'moves':
-      return '#A8F0C0';
+      return '#D7F5C9';
     case 'arrow':
-      return '#FFD85C';
+      return '#FFD08A';
     default:
       return base;
   }
 }
 
-function labelFor(kind: string, arrowDir?: Pos, gone?: boolean) {
+function iconFor(kind: string, arrowDir?: Pos, gone?: boolean) {
   if (gone) return '';
-  if (kind === 'exit') return 'EXIT';
-  if (kind === 'gem') return '★';
-  if (kind === 'switch') return 'W';
-  if (kind === 'hazard') return '!';
-  if (kind === 'mystery') return '?';
-  if (kind === 'teleport') return 'T';
-  if (kind === 'shortcut') return 'O';
-  if (kind === 'shortcutLand') return 'o';
-  if (kind === 'sticky') return 'K';
-  if (kind === 'ice') return '❄';
-  if (kind === 'water') return '🌊';
-  if (kind === 'lava') return '🔥';
-  if (kind === 'rock') return '⛰';
-  if (kind === 'power') return '✦';
-  if (kind === 'cracked') return '╳';
-  if (kind === 'arrow' && arrowDir) {
-    if (arrowDir.c === 1) return '>';
-    if (arrowDir.c === -1) return '<';
-    if (arrowDir.r === -1) return '^';
-    return 'v';
+  switch (kind) {
+    case 'exit':
+      return '🚪';
+    case 'start':
+      return '⚑';
+    case 'gem':
+      return '★';
+    case 'switch':
+      return '⚡';
+    case 'hazard':
+      return '⚠';
+    case 'mystery':
+      return '?';
+    case 'teleport':
+      return '✦';
+    case 'shortcut':
+      return '◎';
+    case 'shortcutLand':
+      return '○';
+    case 'sticky':
+      return '🫧';
+    case 'ice':
+      return '❄';
+    case 'water':
+      return '🌊';
+    case 'lava':
+      return '🔥';
+    case 'rock':
+      return '⛰';
+    case 'power':
+      return '✨';
+    case 'shield':
+      return '🛡';
+    case 'reroll':
+      return '↺';
+    case 'moves':
+      return '+2';
+    case 'crumbly':
+      return '🍪';
+    case 'cracked':
+      return '╳';
+    case 'bridgeOpen':
+      return '══';
+    case 'arrow':
+      if (!arrowDir) return '➤';
+      if (arrowDir.c === 1) return '➤';
+      if (arrowDir.c === -1) return '◀';
+      if (arrowDir.r === -1) return '▲';
+      return '▼';
+    default:
+      return '';
   }
-  return '';
 }
 
 function CandyTile({
-  children,
+  size,
   color,
   glowing,
   danger,
   hole,
-  lift,
+  caption,
+  cost,
   onPress,
 }: {
-  children: React.ReactNode;
+  size: number;
   color: string;
   glowing?: boolean;
   danger?: boolean;
   hole?: boolean;
-  lift?: boolean;
+  caption: string;
+  cost?: number;
   onPress: () => void;
 }) {
   const pulse = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    if (!glowing) return;
+    if (!glowing) {
+      pulse.setValue(0);
+      return;
+    }
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(pulse, { toValue: 1, duration: 550, useNativeDriver: true }),
@@ -126,9 +167,14 @@ function CandyTile({
 
   if (hole) {
     return (
-      <Pressable onPress={onPress} style={[styles.tile, styles.hole]}>
-        {children}
-      </Pressable>
+      <Pressable
+        onPress={onPress}
+        style={[
+          styles.tile,
+          styles.hole,
+          { width: size, height: size, borderRadius: Math.max(10, size * 0.22) },
+        ]}
+      />
     );
   }
 
@@ -138,17 +184,19 @@ function CandyTile({
         style={[
           styles.tile,
           {
+            width: size,
+            height: size,
+            borderRadius: Math.max(10, size * 0.22),
             backgroundColor: color,
-            borderBottomColor: 'rgba(0,0,0,0.22)',
             transform: [
               {
-                translateY: glowing || lift
-                  ? pulse.interpolate({ inputRange: [0, 1], outputRange: [-1, -3] })
+                translateY: glowing
+                  ? pulse.interpolate({ inputRange: [0, 1], outputRange: [-1, -4] })
                   : 0,
               },
               {
                 scale: glowing
-                  ? pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.04] })
+                  ? pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.05] })
                   : 1,
               },
             ],
@@ -158,9 +206,100 @@ function CandyTile({
         ]}
       >
         <View style={styles.sheen} />
-        {children}
+        {!!caption && (
+          <Text style={[styles.tileLabel, size < 48 && { fontSize: 8 }]} numberOfLines={1}>
+            {caption}
+          </Text>
+        )}
+        {cost != null && <Text style={styles.costBadge}>{cost}</Text>}
       </Animated.View>
     </Pressable>
+  );
+}
+
+function ActorSprite({
+  source,
+  ring,
+  size,
+  left,
+  top,
+  faded,
+  shield,
+  zz,
+  die,
+  springKey,
+}: {
+  source: number;
+  ring: string;
+  size: number;
+  left: number;
+  top: number;
+  faded?: boolean;
+  shield?: boolean;
+  zz?: boolean;
+  die?: number | null;
+  springKey: string;
+}) {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    anim.setValue(0);
+    Animated.spring(anim, {
+      toValue: 1,
+      friction: 6,
+      tension: 120,
+      useNativeDriver: true,
+    }).start();
+  }, [springKey, anim]);
+
+  const scale = anim.interpolate({ inputRange: [0, 1], outputRange: [0.82, 1] });
+  const bounce = anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [6, -4, 0] });
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        styles.actorAbs,
+        {
+          left,
+          top,
+          width: size,
+          height: size,
+          opacity: faded ? 0.45 : 1,
+          transform: [{ translateY: bounce }, { scale }],
+        },
+      ]}
+    >
+      <Image
+        source={source}
+        style={[
+          styles.sprite,
+          {
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+            borderColor: ring,
+          },
+        ]}
+      />
+      {shield && (
+        <View
+          style={[
+            styles.shieldRing,
+            {
+              width: size + 6,
+              height: size + 6,
+              borderRadius: (size + 6) / 2,
+            },
+          ]}
+        />
+      )}
+      {zz && <Text style={styles.zz}>zz</Text>}
+      {die != null && (
+        <View style={styles.gloomDie}>
+          <Text style={styles.gloomDieText}>{die}</Text>
+        </View>
+      )}
+    </Animated.View>
   );
 }
 
@@ -169,103 +308,133 @@ export function BoardView({
   onSelect,
   visualPip,
   floating,
+  showDangerOverride,
 }: {
   state: GameState;
   onSelect: (p: Pos) => void;
   visualPip?: Pos;
   floating?: { r: number; c: number; text: string; color: string } | null;
+  showDangerOverride?: boolean;
 }) {
   const { player } = usePlayer();
   const boardSkin = player.equipped.board;
-  const showDanger = player.settings.showDangerTiles;
+  const showDanger =
+    showDangerOverride ?? player.settings.showDangerTiles ?? player.settings.showGloomReach ?? true;
   const reach = new Map(state.reachable.map((p) => [`${p.r},${p.c}`, moveCost(state, p)]));
   const gloomR = new Set(state.gloomReach.map((p) => `${p.r},${p.c}`));
   const pipPos = visualPip ?? state.pip;
 
+  const cols = state.cols;
+  const rows = state.rows;
+  const screenW = Dimensions.get('window').width;
+  const tile = useMemo(() => {
+    const pad = 28;
+    const gap = 3;
+    const maxByWidth = Math.floor((screenW - pad * 2 - gap * (cols - 1)) / cols);
+    return Math.max(36, Math.min(84, maxByWidth));
+  }, [cols, screenW]);
+  const gap = 3;
+  const actorSize = Math.round(tile * 0.72);
+
   return (
     <View style={styles.wrap}>
-      {state.grid.map((row, r) => (
-        <View key={r} style={styles.row}>
-          {row.map((tile, c) => {
-            if (!tile) {
-              return <View key={c} style={[styles.tile, styles.grass]} />;
-            }
-            const k = `${r},${c}`;
-            const cost = reach.get(k);
-            const glowing = cost != null;
-            const danger = showDanger && gloomR.has(k);
-            const pipHere = pipPos.r === r && pipPos.c === c;
-            const gloom = state.glooms.find((g) => g.pos.r === r && g.pos.c === c);
-            const gone =
-              tile.gone ||
-              (tile.kind === 'vanishing' && Math.floor(state.turn / 2) % 2 === 1) ||
-              tile.kind === 'bridgeClosed';
-            const caption =
-              tile.kind === 'water'
-                ? 'Water (2)'
-                : tile.kind === 'lava'
-                  ? 'Lava (2)'
-                  : labelFor(tile.kind, tile.arrowDir, gone);
+      <View>
+        {state.grid.map((row, r) => (
+          <View key={r} style={[styles.row, { marginBottom: gap }]}>
+            {row.map((cell, c) => {
+              if (!cell) {
+                return (
+                  <View
+                    key={c}
+                    style={{ width: tile, height: tile, marginRight: c < cols - 1 ? gap : 0 }}
+                  />
+                );
+              }
+              const k = `${r},${c}`;
+              const cost = reach.get(k);
+              const glowing = cost != null;
+              const danger = showDanger && gloomR.has(k);
+              const gone =
+                cell.gone ||
+                (cell.kind === 'vanishing' && Math.floor(state.turn / 2) % 2 === 1) ||
+                cell.kind === 'bridgeClosed';
+              const icon = iconFor(cell.kind, cell.arrowDir, gone);
+              const caption =
+                cell.kind === 'water'
+                  ? 'Water (2)'
+                  : cell.kind === 'lava'
+                    ? 'Lava (2)'
+                    : icon;
 
-            return (
-              <CandyTile
-                key={c}
-                color={tileColor(tile.kind, boardSkin)}
-                glowing={glowing}
-                danger={danger}
-                hole={gone}
-                onPress={() => onSelect({ r, c })}
-              >
-                <Text style={styles.tileLabel} numberOfLines={1}>
-                  {caption}
-                </Text>
-                {glowing && (
-                  <Text style={styles.costBadge}>{cost}</Text>
-                )}
-                {pipHere && (
-                  <View style={styles.actor}>
-                    <Image source={Images.pip} style={styles.sprite} />
-                    {state.shieldActive && <View style={styles.shieldRing} />}
-                  </View>
-                )}
-                {gloom && !pipHere && (
-                  <View style={[styles.actor, gloom.stunned > 0 && { opacity: 0.45 }]}>
-                    <Image
-                      source={
-                        gloom.kind === 'minion' || gloom.kind === 'emberMinion'
-                          ? Images.gloom
-                          : gloom.kind in GLOOM_META
-                            ? GLOOM_META[gloom.kind as keyof typeof GLOOM_META].image
-                            : Images.gloom
-                      }
-                      style={[
-                        styles.sprite,
-                        {
-                          borderColor:
-                            gloom.kind in GLOOM_META
-                              ? GLOOM_META[gloom.kind as keyof typeof GLOOM_META].ring
-                              : '#3B3B55',
-                        },
-                      ]}
-                    />
-                    {gloom.stunned > 0 && <Text style={styles.zz}>zz</Text>}
-                    {gloom.lastRoll != null && gloom.stunned <= 0 && (
-                      <View style={styles.gloomDie}>
-                        <Text style={styles.gloomDieText}>{gloom.lastRoll}</Text>
-                      </View>
-                    )}
-                  </View>
-                )}
-                {floating && floating.r === r && floating.c === c && (
-                  <Text style={[styles.floatLabel, { color: floating.color }]}>
-                    {floating.text}
-                  </Text>
-                )}
-              </CandyTile>
-            );
-          })}
-        </View>
-      ))}
+              return (
+                <View key={c} style={{ marginRight: c < cols - 1 ? gap : 0 }}>
+                  <CandyTile
+                    size={tile}
+                    color={tileColor(cell.kind, boardSkin)}
+                    glowing={glowing}
+                    danger={danger}
+                    hole={gone}
+                    caption={caption}
+                    cost={cost}
+                    onPress={() => onSelect({ r, c })}
+                  />
+                </View>
+              );
+            })}
+          </View>
+        ))}
+
+        {/* Actors drawn above the tile grid */}
+        <ActorSprite
+          source={Images.pip}
+          ring="#FFFFFF"
+          size={actorSize}
+          left={pipPos.c * (tile + gap) + (tile - actorSize) / 2}
+          top={pipPos.r * (tile + gap) + (tile - actorSize) / 2}
+          shield={state.shieldActive}
+          springKey={`pip-${pipPos.r}-${pipPos.c}`}
+        />
+        {state.glooms.map((g) => {
+          const meta =
+            g.kind in GLOOM_META
+              ? GLOOM_META[g.kind as keyof typeof GLOOM_META]
+              : null;
+          return (
+            <ActorSprite
+              key={g.id}
+              source={
+                g.kind === 'minion' || g.kind === 'emberMinion'
+                  ? Images.gloom
+                  : meta?.image ?? Images.gloom
+              }
+              ring={meta?.ring ?? '#3B3B55'}
+              size={actorSize}
+              left={g.pos.c * (tile + gap) + (tile - actorSize) / 2}
+              top={g.pos.r * (tile + gap) + (tile - actorSize) / 2}
+              faded={g.stunned > 0}
+              zz={g.stunned > 0}
+              die={g.stunned > 0 ? null : g.lastRoll ?? null}
+              springKey={`${g.id}-${g.pos.r}-${g.pos.c}`}
+            />
+          );
+        })}
+
+        {floating && (
+          <Text
+            style={[
+              styles.floatLabel,
+              {
+                color: floating.color,
+                left: floating.c * (tile + gap),
+                top: floating.r * (tile + gap) - 10,
+                width: tile,
+              },
+            ]}
+          >
+            {floating.text}
+          </Text>
+        )}
+      </View>
     </View>
   );
 }
@@ -279,30 +448,26 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: 'row' },
   tile: {
-    width: TILE,
-    height: TILE,
-    margin: 2,
-    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    borderBottomWidth: 4,
+    borderBottomWidth: 5,
+    borderBottomColor: 'rgba(0,0,0,0.22)',
   },
   hole: {
     backgroundColor: 'transparent',
     borderWidth: 2,
     borderStyle: 'dashed',
-    borderColor: 'rgba(0,0,0,0.25)',
+    borderColor: 'rgba(0,0,0,0.28)',
     borderBottomWidth: 2,
   },
-  grass: { backgroundColor: 'transparent', borderBottomWidth: 0 },
   sheen: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 10,
-    backgroundColor: 'rgba(255,255,255,0.28)',
+    height: '32%',
+    backgroundColor: 'rgba(255,255,255,0.32)',
   },
   glow: {
     borderWidth: 2,
@@ -317,45 +482,47 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
   },
   tileLabel: {
-    position: 'absolute',
-    top: 2,
-    fontSize: 8,
-    fontFamily: 'Fredoka_600SemiBold',
+    fontSize: 13,
+    fontFamily: 'Fredoka_700Bold',
     color: colors.ink,
-    opacity: 0.75,
+    textAlign: 'center',
+    textShadowColor: 'rgba(255,255,255,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 1,
   },
   costBadge: {
     position: 'absolute',
-    bottom: 2,
-    right: 3,
-    fontSize: 9,
+    bottom: 3,
+    right: 5,
+    fontSize: 11,
     fontFamily: 'Fredoka_700Bold',
     color: '#8a5a00',
   },
-  actor: {
+  actorAbs: {
+    position: 'absolute',
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 5,
+    shadowColor: '#000',
+    shadowOpacity: 0.28,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 5,
   },
   sprite: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    borderWidth: 2,
-    borderColor: '#fff',
+    borderWidth: 3,
     resizeMode: 'cover',
+    backgroundColor: '#fff',
   },
   shieldRing: {
     position: 'absolute',
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    borderWidth: 2,
+    borderWidth: 3,
     borderColor: '#3D7BEA',
   },
   zz: {
     position: 'absolute',
-    top: -6,
-    fontSize: 9,
+    top: -8,
+    fontSize: 11,
     fontFamily: 'Fredoka_600SemiBold',
     color: '#5B3FD1',
   },
@@ -363,22 +530,23 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: -6,
     right: -8,
-    width: 16,
-    height: 16,
-    borderRadius: 4,
+    width: 18,
+    height: 18,
+    borderRadius: 5,
     backgroundColor: '#2A2438',
     alignItems: 'center',
     justifyContent: 'center',
   },
   gloomDieText: {
     color: '#fff',
-    fontSize: 9,
+    fontSize: 10,
     fontFamily: 'Fredoka_700Bold',
   },
   floatLabel: {
     position: 'absolute',
-    top: -8,
+    zIndex: 8,
     fontFamily: 'Fredoka_700Bold',
-    fontSize: 11,
+    fontSize: 12,
+    textAlign: 'center',
   },
 });

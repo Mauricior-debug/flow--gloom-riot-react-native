@@ -52,5 +52,5 @@ const styles = StyleSheet.create({
     fontSize: 18,
     width: 24,
   },
-  avatar: { width: 44, height: 44, borderRadius: 14 },
+  avatar: { width: 44, height: 44, borderRadius: 22, borderWidth: 3, borderColor: '#fff' },
 });

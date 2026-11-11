@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Alert } from 'react-native';
+import { GameModal } from '../../components/GameModal';
 import { Screen } from '../../components/Screen';
 import { BackRow, Body, Field, Panel, PrimaryButton, SecondaryButton } from '../../components/ui';
 import { usePlayer } from '../../state/PlayerContext';
@@ -9,6 +9,7 @@ export default function LoginScreen() {
   const { login } = usePlayer();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [toast, setToast] = useState<{ title: string; body: string; go?: boolean } | null>(null);
 
   return (
     <Screen scroll>
@@ -36,8 +37,7 @@ export default function LoginScreen() {
           style={{ marginTop: 14 }}
           onPress={() => {
             const r = login(email, password);
-            Alert.alert(r.ok ? 'Welcome' : 'Login', r.message);
-            if (r.ok) router.replace('/profile');
+            setToast({ title: r.ok ? 'Welcome' : 'Login', body: r.message, go: r.ok });
           }}
         />
       </Panel>
@@ -50,6 +50,17 @@ export default function LoginScreen() {
         label="Create account"
         style={{ marginTop: 10 }}
         onPress={() => router.push('/auth/register')}
+      />
+      <GameModal
+        visible={!!toast}
+        title={toast?.title ?? ''}
+        body={toast?.body}
+        primaryLabel="OK"
+        onPrimary={() => {
+          const go = toast?.go;
+          setToast(null);
+          if (go) router.replace('/profile');
+        }}
       />
     </Screen>
   );

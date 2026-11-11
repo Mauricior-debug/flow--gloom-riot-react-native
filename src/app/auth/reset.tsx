@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Alert } from 'react-native';
+import { GameModal } from '../../components/GameModal';
 import { Screen } from '../../components/Screen';
 import { BackRow, Body, Field, Panel, PrimaryButton } from '../../components/ui';
 import { usePlayer } from '../../state/PlayerContext';
@@ -10,6 +10,7 @@ export default function ResetScreen() {
   const { resetPassword } = usePlayer();
   const [email, setEmail] = useState(emailParam ?? '');
   const [password, setPassword] = useState('');
+  const [toast, setToast] = useState<{ title: string; body: string; go?: boolean } | null>(null);
 
   return (
     <Screen scroll>
@@ -37,11 +38,21 @@ export default function ResetScreen() {
           style={{ marginTop: 14 }}
           onPress={() => {
             const r = resetPassword(email, password);
-            Alert.alert(r.ok ? 'Updated' : 'Reset', r.message);
-            if (r.ok) router.replace('/auth/login');
+            setToast({ title: r.ok ? 'Updated' : 'Reset', body: r.message, go: r.ok });
           }}
         />
       </Panel>
+      <GameModal
+        visible={!!toast}
+        title={toast?.title ?? ''}
+        body={toast?.body}
+        primaryLabel="OK"
+        onPrimary={() => {
+          const go = toast?.go;
+          setToast(null);
+          if (go) router.replace('/auth/login');
+        }}
+      />
     </Screen>
   );
 }

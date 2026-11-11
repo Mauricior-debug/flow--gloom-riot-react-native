@@ -1,10 +1,11 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Image, StyleSheet, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 import { Screen } from '../../components/Screen';
 import { BackRow, Body, Panel, PrimaryButton, Title } from '../../components/ui';
-import { GLOOM_META, getLevel, resolveLevel } from '../../data/levels';
+import { GLOOM_META, getLevel, resolveLevel, WORLDS } from '../../data/levels';
 import { usePlayer } from '../../state/PlayerContext';
-import { colors } from '../../theme/colors';
+import { colors, radii } from '../../theme/colors';
 
 export default function LevelPreviewScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -20,24 +21,40 @@ export default function LevelPreviewScreen() {
     );
   }
 
+  const world = WORLDS.find((w) => w.id === level.worldId);
   const resolved = resolveLevel(level);
   const unlocked = isLevelUnlocked(level.id) || player.forceUnlocked.includes(level.id);
 
   return (
     <Screen scroll>
       <BackRow title={level.name} onBack={() => router.back()} />
-      <Panel>
-        <Title style={{ fontSize: 26 }}>{level.name}</Title>
-        <Body style={{ marginTop: 8 }}>{level.objective}</Body>
-        <Body style={{ marginTop: 12 }}>
-          Hearts {resolved.hearts} · Par {resolved.par} · Reward {resolved.reward} coins
-        </Body>
-        {resolved.gemGoal > 0 && (
-          <Body style={{ marginTop: 4 }}>Star Gem goal: {resolved.gemGoal}</Body>
+
+      <View style={styles.photoWrap}>
+        {world ? (
+          <Image source={world.image} style={styles.photo} />
+        ) : (
+          <View style={[styles.photo, { backgroundColor: colors.muted }]} />
         )}
-        {level.boss && <Body style={{ marginTop: 4, color: colors.danger }}>Boss level</Body>}
+        <LinearGradient colors={['transparent', 'rgba(20,12,8,0.78)']} style={styles.fade}>
+          <Text style={styles.photoTitle}>{level.name}</Text>
+          {level.boss ? <Text style={styles.boss}>♔ Boss level</Text> : null}
+        </LinearGradient>
+      </View>
+
+      <Panel style={{ marginTop: 12 }}>
+        <Body>{level.objective}</Body>
+        <View style={styles.metaRow}>
+          <Text style={styles.meta}>{'♥'.repeat(resolved.hearts)}</Text>
+          <Text style={styles.meta}>Par {resolved.par}</Text>
+          <Text style={styles.meta}>{resolved.reward}●</Text>
+        </View>
+        {resolved.gemGoal > 0 && (
+          <Body muted style={{ marginTop: 6 }}>
+            Star Gem goal: {resolved.gemGoal}
+          </Body>
+        )}
         {level.exitLocked && (
-          <Body style={{ marginTop: 4 }}>EXIT starts locked — press every switch.</Body>
+          <Body style={{ marginTop: 6 }}>EXIT starts locked — press every switch.</Body>
         )}
       </Panel>
 
@@ -53,7 +70,9 @@ export default function LevelPreviewScreen() {
               <View style={{ flex: 1 }}>
                 <Body style={{ fontFamily: 'Fredoka_600SemiBold' }}>{meta.name}</Body>
                 <Body muted>{meta.blurb}</Body>
-                <Body muted>Dice {dmin}–{dmax}</Body>
+                <Body muted>
+                  Dice {dmin}–{dmax}
+                </Body>
               </View>
             </View>
           );
@@ -63,7 +82,7 @@ export default function LevelPreviewScreen() {
       <PrimaryButton
         label={unlocked ? 'Play' : 'Locked'}
         disabled={!unlocked}
-        style={{ marginTop: 18 }}
+        style={{ marginTop: 18, backgroundColor: unlocked ? colors.accent : undefined }}
         onPress={() => {
           setCurrentLevel(level.id);
           router.push(`/play/${level.id}`);
@@ -74,6 +93,31 @@ export default function LevelPreviewScreen() {
 }
 
 const styles = StyleSheet.create({
+  photoWrap: {
+    height: 160,
+    borderRadius: radii.panel,
+    overflow: 'hidden',
+    borderWidth: 3,
+    borderColor: '#fff',
+  },
+  photo: { width: '100%', height: 160 },
+  fade: {
+    ...StyleSheet.absoluteFill,
+    justifyContent: 'flex-end',
+    padding: 14,
+  },
+  photoTitle: {
+    fontFamily: 'Fredoka_700Bold',
+    color: '#fff',
+    fontSize: 26,
+  },
+  boss: {
+    fontFamily: 'Fredoka_600SemiBold',
+    color: colors.accent,
+    marginTop: 2,
+  },
+  metaRow: { flexDirection: 'row', gap: 14, marginTop: 12 },
+  meta: { fontFamily: 'Fredoka_600SemiBold', color: colors.ink },
   gloomRow: {
     flexDirection: 'row',
     gap: 12,
@@ -83,7 +127,7 @@ const styles = StyleSheet.create({
   gloomImg: {
     width: 56,
     height: 56,
-    borderRadius: 16,
+    borderRadius: 28,
     borderWidth: 3,
   },
 });
