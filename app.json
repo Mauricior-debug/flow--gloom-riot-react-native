@@ -7,7 +7,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "gloomriot",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.gloomriot.app"
@@ -40,6 +39,19 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "owner": "naza123",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "a1e40879-a3f4-46c1-bdea-2a97a1af9de7"
+      }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/a1e40879-a3f4-46c1-bdea-2a97a1af9de7"
+    },
+    "runtimeVersion": {
+      "policy": "sdkVersion"
     }
   }
 }

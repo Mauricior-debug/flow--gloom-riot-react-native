@@ -1,3 +1,4 @@
+import 'react-native-gesture-handler';
 import {
   Fredoka_400Regular,
   Fredoka_600SemiBold,
@@ -11,7 +12,7 @@ import {
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { PlayerProvider } from '../state/PlayerContext';
 import { colors } from '../theme/colors';
@@ -27,12 +28,20 @@ export default function RootLayout() {
     Nunito_500Medium,
     Nunito_700Bold,
   });
+  const [timedOut, setTimedOut] = useState(false);
 
   useEffect(() => {
-    if (loaded) SplashScreen.hideAsync().catch(() => undefined);
-  }, [loaded]);
+    const t = setTimeout(() => setTimedOut(true), 4000);
+    return () => clearTimeout(t);
+  }, []);
 
-  if (!loaded) return null;
+  useEffect(() => {
+    if (loaded || timedOut) {
+      SplashScreen.hideAsync().catch(() => undefined);
+    }
+  }, [loaded, timedOut]);
+
+  if (!loaded && !timedOut) return null;
 
   return (
     <PlayerProvider>
@@ -41,7 +50,7 @@ export default function RootLayout() {
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: colors.pageBg },
-          animation: 'slide_from_right',
+          animation: 'fade',
         }}
       />
     </PlayerProvider>

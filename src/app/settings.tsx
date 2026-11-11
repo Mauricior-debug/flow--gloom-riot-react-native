@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Screen } from '../components/Screen';
 import { BackRow, Body, Panel, Title } from '../components/ui';
 import { usePlayer } from '../state/PlayerContext';
@@ -24,6 +24,37 @@ function Toggle({
   );
 }
 
+function VolumeSlider({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (n: number) => void;
+}) {
+  const steps = [0, 25, 50, 75, 100];
+  return (
+    <View style={styles.sliderBlock}>
+      <View style={styles.sliderHead}>
+        <Body style={{ flex: 1 }}>{label}</Body>
+        <Text style={styles.sliderValue}>{value}</Text>
+      </View>
+      <View style={styles.sliderRow}>
+        {steps.map((n) => (
+          <Pressable
+            key={n}
+            onPress={() => onChange(n)}
+            style={[styles.sliderTick, value >= n && styles.sliderTickOn, value === n && styles.sliderTickActive]}
+          >
+            <Text style={styles.tickText}>{n}</Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 export default function SettingsScreen() {
   const { player, update } = usePlayer();
   const s = player.settings;
@@ -32,12 +63,53 @@ export default function SettingsScreen() {
     <Screen scroll>
       <BackRow title="Settings" onBack={() => router.back()} />
       <Panel>
+        <Title style={{ fontSize: 20, marginBottom: 8 }}>Audio</Title>
+        <VolumeSlider
+          label="Music volume"
+          value={s.musicVolume ?? 50}
+          onChange={(musicVolume) =>
+            update((p) => ({ ...p, settings: { ...p.settings, musicVolume } }))
+          }
+        />
+        <VolumeSlider
+          label="Sound effects"
+          value={s.sfxVolume ?? 80}
+          onChange={(sfxVolume) =>
+            update((p) => ({ ...p, settings: { ...p.settings, sfxVolume } }))
+          }
+        />
+        <Toggle
+          label="Haptics"
+          value={s.haptics ?? true}
+          onToggle={() =>
+            update((p) => ({
+              ...p,
+              settings: { ...p.settings, haptics: !(p.settings.haptics ?? true) },
+            }))
+          }
+        />
+      </Panel>
+
+      <Panel style={{ marginTop: 12 }}>
         <Title style={{ fontSize: 20, marginBottom: 8 }}>Preferences</Title>
         <Toggle
-          label="Sound"
+          label="Sound master"
           value={s.sound}
           onToggle={() =>
             update((p) => ({ ...p, settings: { ...p.settings, sound: !p.settings.sound } }))
+          }
+        />
+        <Toggle
+          label="Show danger tiles"
+          value={s.showDangerTiles ?? true}
+          onToggle={() =>
+            update((p) => ({
+              ...p,
+              settings: {
+                ...p.settings,
+                showDangerTiles: !(p.settings.showDangerTiles ?? true),
+              },
+            }))
           }
         />
         <Toggle
@@ -99,4 +171,27 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   knobOn: { alignSelf: 'flex-end' },
+  sliderBlock: { marginBottom: 14 },
+  sliderHead: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  sliderValue: {
+    fontFamily: 'Fredoka_600SemiBold',
+    color: colors.ink,
+  },
+  sliderRow: { flexDirection: 'row', gap: 8 },
+  sliderTick: {
+    flex: 1,
+    backgroundColor: colors.muted,
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  sliderTickOn: { backgroundColor: '#dffaf5' },
+  sliderTickActive: {
+    backgroundColor: colors.primary,
+  },
+  tickText: {
+    fontFamily: 'Fredoka_600SemiBold',
+    color: colors.ink,
+    fontSize: 12,
+  },
 });
