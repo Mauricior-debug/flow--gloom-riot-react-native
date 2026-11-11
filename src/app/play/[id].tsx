@@ -463,9 +463,10 @@ export default function PlayScreen() {
 
   const spin = diceAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '420deg'] });
   const hop = diceAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, -16, 0] });
+  // Always pass Animated nodes (never mix number/string into transform) to avoid RN-web layout shrink.
 
   return (
-    <Screen contentStyle={{ paddingBottom: 8 }}>
+    <Screen scroll contentStyle={{ paddingBottom: 16 }}>
       <View style={styles.topBar}>
         <Pressable onPress={() => setPaused(true)} style={styles.pause}>
           <Text style={styles.pauseText}>Ⅱ</Text>
@@ -508,12 +509,7 @@ export default function PlayScreen() {
       </View>
 
       <View style={styles.bottomBar}>
-        <Animated.View
-          style={[
-            styles.die,
-            rolling && { transform: [{ translateY: hop }, { rotate: spin }] },
-          ]}
-        >
+        <Animated.View style={[styles.die, { transform: [{ translateY: hop }, { rotate: spin }] }]}>
           <Text style={styles.dieFace}>{diceFace}</Text>
         </Animated.View>
 

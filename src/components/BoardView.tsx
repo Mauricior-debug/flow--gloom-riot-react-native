@@ -178,6 +178,9 @@ function CandyTile({
     );
   }
 
+  const lift = pulse.interpolate({ inputRange: [0, 1], outputRange: [0, glowing ? -4 : 0] });
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, glowing ? 1.05 : 1] });
+
   return (
     <Pressable onPress={onPress}>
       <Animated.View
@@ -188,18 +191,7 @@ function CandyTile({
             height: size,
             borderRadius: Math.max(10, size * 0.22),
             backgroundColor: color,
-            transform: [
-              {
-                translateY: glowing
-                  ? pulse.interpolate({ inputRange: [0, 1], outputRange: [-1, -4] })
-                  : 0,
-              },
-              {
-                scale: glowing
-                  ? pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.05] })
-                  : 1,
-              },
-            ],
+            transform: [{ translateY: lift }, { scale }],
           },
           glowing && styles.glow,
           danger && styles.dangerDash,
@@ -336,11 +328,17 @@ export function BoardView({
   const gap = 3;
   const actorSize = Math.round(tile * 0.72);
 
+  const boardW = cols * tile + Math.max(0, cols - 1) * gap;
+  const boardH = rows * tile + Math.max(0, rows - 1) * gap;
+
   return (
     <View style={styles.wrap}>
-      <View>
+      <View style={{ width: boardW, height: boardH, position: 'relative' }}>
         {state.grid.map((row, r) => (
-          <View key={r} style={[styles.row, { marginBottom: gap }]}>
+          <View
+            key={r}
+            style={[styles.row, { position: 'absolute', top: r * (tile + gap), left: 0 }]}
+          >
             {row.map((cell, c) => {
               if (!cell) {
                 return (
