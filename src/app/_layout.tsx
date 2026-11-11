@@ -11,6 +11,7 @@ import {
 } from '@expo-google-fonts/nunito';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
@@ -29,6 +30,10 @@ export default function RootLayout() {
     Nunito_700Bold,
   });
   const [timedOut, setTimedOut] = useState(false);
+
+  useEffect(() => {
+    ScreenOrientation.unlockAsync().catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     const t = setTimeout(() => setTimedOut(true), 4000);

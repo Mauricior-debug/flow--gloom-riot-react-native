@@ -67,5 +67,5 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   head: { flexDirection: 'row', gap: 12, alignItems: 'center' },
-  avatar: { width: 72, height: 72, borderRadius: 22, borderWidth: 3, borderColor: '#fff' },
+  avatar: { width: 72, height: 72, borderRadius: 36, borderWidth: 3, borderColor: '#fff' },
 });

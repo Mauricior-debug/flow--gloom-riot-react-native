@@ -747,7 +747,9 @@ export function scoreResult(state: GameState) {
   const coins =
     (state.reward + 10 * state.gemsCollected + state.coinsFound) * 1;
 
-  return { stars: starCount, score, coins, underPar };
+  const title =
+    starCount >= 3 ? 'Perfect Escape' : starCount === 2 ? 'Great Escape' : 'Escaped';
+  return { stars: starCount, score, coins, underPar, title };
 }
 
 export { inBounds, getTile, isWalkable, key, neighbors };

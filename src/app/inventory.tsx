@@ -1,19 +1,35 @@
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Screen } from '../components/Screen';
 import { BackRow, Body, Panel, Title } from '../components/ui';
 import { usePlayer } from '../state/PlayerContext';
-import { colors } from '../theme/colors';
+import { colors, radii } from '../theme/colors';
 
 const ITEM_META = [
-  { key: 'reroll', name: 'Reroll', color: colors.items.reroll },
-  { key: 'shield', name: 'Shield', color: colors.items.shield },
-  { key: 'moves', name: '+2 Moves', color: colors.items.moves },
-  { key: 'revive', name: 'Revive', color: colors.items.revive },
-  { key: 'teleport', name: 'Teleport Boost', color: colors.items.teleport },
-  { key: 'lucky', name: 'Lucky Dice', color: colors.items.lucky },
-  { key: 'headStart', name: 'Head Start', color: colors.items.headStart },
+  { key: 'reroll', name: 'Reroll', color: colors.items.reroll, icon: '↺' },
+  { key: 'shield', name: 'Shield', color: colors.items.shield, icon: '🛡' },
+  { key: 'moves', name: '+2 Moves', color: colors.items.moves, icon: '+2' },
+  { key: 'revive', name: 'Revive', color: colors.items.revive, icon: '✚' },
+  { key: 'teleport', name: 'Teleport Boost', color: colors.items.teleport, icon: '✧' },
+  { key: 'lucky', name: 'Lucky Dice', color: colors.items.lucky, icon: '🎲' },
+  { key: 'headStart', name: 'Head Start', color: colors.items.headStart, icon: '⚡' },
 ] as const;
+
+function EquipChip({
+  label,
+  selected,
+  onPress,
+}: {
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable onPress={onPress} style={[styles.equipChip, selected && styles.equipSelected]}>
+      <Text style={styles.equipText}>{label}</Text>
+    </Pressable>
+  );
+}
 
 export default function InventoryScreen() {
   const { player, equipCosmetic } = usePlayer();
@@ -23,65 +39,105 @@ export default function InventoryScreen() {
       <BackRow title="Inventory" onBack={() => router.back()} />
 
       <Title style={{ fontSize: 20, marginBottom: 8 }}>Items</Title>
-      {ITEM_META.map((item) => (
-        <Panel key={item.key} style={{ marginBottom: 8 }}>
-          <View style={styles.row}>
-            <View style={[styles.swatch, { backgroundColor: item.color }]} />
-            <View style={{ flex: 1 }}>
-              <Body style={{ fontFamily: 'Fredoka_600SemiBold' }}>{item.name}</Body>
-              <Body muted>Owned: {player.consumables[item.key]}</Body>
+      <View style={styles.itemGrid}>
+        {ITEM_META.map((item) => (
+          <Panel key={item.key} style={styles.itemCard}>
+            <View style={[styles.swatch, { backgroundColor: item.color }]}>
+              <Text style={styles.swatchIcon}>{item.icon}</Text>
             </View>
-          </View>
-        </Panel>
-      ))}
+            <Body style={{ fontFamily: 'Fredoka_600SemiBold', textAlign: 'center' }}>
+              {item.name}
+            </Body>
+            <Body muted style={{ textAlign: 'center' }}>
+              ×{player.consumables[item.key]}
+            </Body>
+          </Panel>
+        ))}
+      </View>
 
       <Title style={{ fontSize: 20, marginVertical: 8 }}>Cosmetics</Title>
-      <Panel style={{ marginBottom: 8 }}>
-        <Body style={{ fontFamily: 'Fredoka_600SemiBold' }}>Auras</Body>
-        {player.cosmetics.auras.map((a) => (
-          <Pressable key={a} onPress={() => equipCosmetic('aura', a)} style={styles.equipRow}>
-            <Body>
-              {a} {player.equipped.aura === a ? '· equipped' : ''}
-            </Body>
-          </Pressable>
-        ))}
+      <Panel style={{ marginBottom: 10 }}>
+        <Body style={{ fontFamily: 'Fredoka_600SemiBold', marginBottom: 8 }}>Auras</Body>
+        <View style={styles.chipRow}>
+          {player.cosmetics.auras.map((a) => (
+            <EquipChip
+              key={a}
+              label={a}
+              selected={player.equipped.aura === a}
+              onPress={() => equipCosmetic('aura', a)}
+            />
+          ))}
+        </View>
       </Panel>
-      <Panel style={{ marginBottom: 8 }}>
-        <Body style={{ fontFamily: 'Fredoka_600SemiBold' }}>Dice skins</Body>
-        {player.cosmetics.diceSkins.map((a) => (
-          <Pressable key={a} onPress={() => equipCosmetic('diceSkin', a)} style={styles.equipRow}>
-            <Body>
-              {a} {player.equipped.diceSkin === a ? '· equipped' : ''}
-            </Body>
-          </Pressable>
-        ))}
+      <Panel style={{ marginBottom: 10 }}>
+        <Body style={{ fontFamily: 'Fredoka_600SemiBold', marginBottom: 8 }}>Dice skins</Body>
+        <View style={styles.chipRow}>
+          {player.cosmetics.diceSkins.map((a) => (
+            <EquipChip
+              key={a}
+              label={a}
+              selected={player.equipped.diceSkin === a}
+              onPress={() => equipCosmetic('diceSkin', a)}
+            />
+          ))}
+        </View>
       </Panel>
-      <Panel style={{ marginBottom: 8 }}>
-        <Body style={{ fontFamily: 'Fredoka_600SemiBold' }}>Trails</Body>
-        {player.cosmetics.trails.map((a) => (
-          <Pressable key={a} onPress={() => equipCosmetic('trail', a)} style={styles.equipRow}>
-            <Body>
-              {a} {player.equipped.trail === a ? '· equipped' : ''}
-            </Body>
-          </Pressable>
-        ))}
+      <Panel style={{ marginBottom: 10 }}>
+        <Body style={{ fontFamily: 'Fredoka_600SemiBold', marginBottom: 8 }}>Trails</Body>
+        <View style={styles.chipRow}>
+          {player.cosmetics.trails.map((a) => (
+            <EquipChip
+              key={a}
+              label={a}
+              selected={player.equipped.trail === a}
+              onPress={() => equipCosmetic('trail', a)}
+            />
+          ))}
+        </View>
       </Panel>
       <Panel>
-        <Body style={{ fontFamily: 'Fredoka_600SemiBold' }}>Boards</Body>
-        {player.cosmetics.boards.map((a) => (
-          <Pressable key={a} onPress={() => equipCosmetic('board', a)} style={styles.equipRow}>
-            <Body>
-              {a} {player.equipped.board === a ? '· equipped' : ''}
-            </Body>
-          </Pressable>
-        ))}
+        <Body style={{ fontFamily: 'Fredoka_600SemiBold', marginBottom: 8 }}>Boards</Body>
+        <View style={styles.chipRow}>
+          {player.cosmetics.boards.map((a) => (
+            <EquipChip
+              key={a}
+              label={a}
+              selected={player.equipped.board === a}
+              onPress={() => equipCosmetic('board', a)}
+            />
+          ))}
+        </View>
       </Panel>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  swatch: { width: 28, height: 28, borderRadius: 10 },
-  equipRow: { paddingVertical: 8 },
+  itemGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  itemCard: { width: '30%', alignItems: 'center', paddingVertical: 12 },
+  swatch: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+    borderWidth: 3,
+    borderColor: '#fff',
+  },
+  swatchIcon: { color: '#fff', fontFamily: 'Fredoka_700Bold', fontSize: 14 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  equipChip: {
+    backgroundColor: colors.muted,
+    borderRadius: radii.pill,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 3,
+    borderColor: 'transparent',
+  },
+  equipSelected: {
+    borderColor: colors.accent,
+    backgroundColor: '#FFF4D0',
+  },
+  equipText: { fontFamily: 'Fredoka_600SemiBold', color: colors.ink, textTransform: 'capitalize' },
 });
