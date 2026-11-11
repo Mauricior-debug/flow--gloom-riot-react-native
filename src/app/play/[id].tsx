@@ -133,6 +133,10 @@ export default function PlayScreen() {
   const { id, resume } = useLocalSearchParams<{ id: string; resume?: string }>();
   const { width, height } = useWindowDimensions();
   const landscape = width > height;
+  const [landBoardBox, setLandBoardBox] = useState({ w: 0, h: 0 });
+  useEffect(() => {
+    setLandBoardBox({ w: 0, h: 0 });
+  }, [width, height]);
   const {
     player,
     applyLevelWin,
@@ -557,9 +561,10 @@ export default function PlayScreen() {
       ? 'Tap the die to roll'
       : `Rolled ${state.lastRoll ?? diceFace}! Tap a glowing tile.`;
 
-  const sideW = Math.min(210, Math.max(180, Math.floor(width * 0.28)));
-  const landBoardMaxW = width - sideW - 28;
-  const landBoardMaxH = height - 64;
+  // Narrow side column so the board keeps most of the width when rotated.
+  const sideW = Math.min(188, Math.max(156, Math.floor(width * 0.24)));
+  const landBoardMaxW = landBoardBox.w > 0 ? landBoardBox.w - 8 : width - sideW - 40;
+  const landBoardMaxH = landBoardBox.h > 0 ? landBoardBox.h - 8 : height - 96;
 
   const sharedModals = (
     <>
@@ -640,7 +645,17 @@ export default function PlayScreen() {
           compact
         />
         <View style={styles.landBody}>
-          <View style={styles.landBoardCol}>
+          <View
+            style={styles.landBoardCol}
+            onLayout={(e) => {
+              const { width: w, height: h } = e.nativeEvent.layout;
+              setLandBoardBox((prev) =>
+                prev.w === Math.floor(w) && prev.h === Math.floor(h)
+                  ? prev
+                  : { w: Math.floor(w), h: Math.floor(h) }
+              );
+            }}
+          >
             <View style={[styles.boardTray, styles.boardTrayLand]}>
               <BoardView
                 state={state}
@@ -650,7 +665,7 @@ export default function PlayScreen() {
                 showDangerOverride={showReach}
                 maxWidth={landBoardMaxW}
                 maxHeight={landBoardMaxH}
-                maxTile={64}
+                maxTile={58}
               />
               {tipCard ? (
                 <View style={styles.tipCard}>
@@ -923,10 +938,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFF8E8',
     paddingTop: 2,
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingBottom: 2,
   },
-  landBody: { flex: 1, flexDirection: 'row', gap: 8, minHeight: 0 },
+  landBody: { flex: 1, flexDirection: 'row', gap: 6, minHeight: 0 },
   landBoardCol: {
     flex: 1,
     minWidth: 0,
@@ -934,7 +949,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     overflow: 'hidden',
   },
-  landSide: { gap: 6, flexShrink: 0 },
+  landSide: { gap: 4, flexShrink: 0, justifyContent: 'flex-start' },
   portRoot: {
     flex: 1,
     backgroundColor: '#FFF8E8',
@@ -963,51 +978,54 @@ const styles = StyleSheet.create({
   boardTrayLand: {
     alignSelf: 'center',
     maxWidth: '100%',
+    padding: 4,
+    borderRadius: 16,
+    borderWidth: 2,
   },
   dieCardLand: {
-    borderRadius: 18,
-    padding: 10,
+    borderRadius: 14,
+    padding: 8,
   },
   dieCardRow: { flexDirection: 'row', alignItems: 'center' },
   bigDieLand: {
-    width: 56,
-    height: 56,
-    borderRadius: 14,
+    width: 48,
+    height: 48,
+    borderRadius: 12,
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
-    borderBottomWidth: 4,
+    borderBottomWidth: 3,
     borderBottomColor: 'rgba(0,0,0,0.15)',
   },
-  bigDieFaceLand: { fontFamily: 'Fredoka_700Bold', fontSize: 28, color: colors.ink },
-  hugeNumLand: { color: '#fff', fontFamily: 'Fredoka_700Bold', fontSize: 32, lineHeight: 36 },
+  bigDieFaceLand: { fontFamily: 'Fredoka_700Bold', fontSize: 24, color: colors.ink },
+  hugeNumLand: { color: '#fff', fontFamily: 'Fredoka_700Bold', fontSize: 28, lineHeight: 32 },
   landHint: {
     flex: 1,
     fontFamily: 'Fredoka_600SemiBold',
     color: colors.ink,
-    fontSize: 12,
+    fontSize: 11,
   },
   adRerollLand: {
     flex: 1,
     backgroundColor: '#FFE0F0',
     borderRadius: 12,
-    paddingVertical: 8,
-    paddingHorizontal: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 6,
   },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
+    gap: 6,
+    marginBottom: 4,
   },
   pause: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
-    borderBottomWidth: 4,
+    borderBottomWidth: 3,
     borderBottomColor: 'rgba(0,0,0,0.12)',
   },
   pauseText: { fontFamily: 'Fredoka_700Bold', fontSize: 16, color: colors.ink },

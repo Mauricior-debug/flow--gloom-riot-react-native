@@ -331,13 +331,14 @@ export function BoardView({
   const planned = new Set((plannedPath ?? []).map((p) => `${p.r},${p.c}`));
   const tile = useMemo(() => {
     const gap = 3;
-    const pad = 16;
+    // When callers pass measured maxWidth/maxHeight, trust those bounds with a small pad.
+    const pad = maxWidth != null || maxHeight != null ? 4 : 16;
     const cap = maxTile ?? 84;
     const availW = (maxWidth ?? screenW) - pad;
     const availH = (maxHeight ?? screenH * 0.72) - pad;
     const maxByWidth = Math.floor((availW - gap * (cols - 1)) / cols);
     const maxByHeight = Math.floor((availH - gap * (rows - 1)) / rows);
-    return Math.max(28, Math.min(cap, maxByWidth, maxByHeight));
+    return Math.max(26, Math.min(cap, maxByWidth, maxByHeight));
   }, [cols, rows, screenW, screenH, maxTile, maxWidth, maxHeight]);
   const gap = 3;
   const actorSize = Math.round(tile * 0.72);
