@@ -1,3 +1,4 @@
+import 'react-native-gesture-handler';
 import {
   Fredoka_400Regular,
   Fredoka_600SemiBold,
