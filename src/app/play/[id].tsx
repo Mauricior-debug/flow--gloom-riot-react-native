@@ -186,10 +186,6 @@ export default function PlayScreen() {
   const [showReach, setShowReach] = useState(
     player.settings.showGloomReach ?? player.settings.showDangerTiles ?? true
   );
-  const [plannedPath, setPlannedPath] = useState<Pos[]>([]);
-  const [stepQueue, setStepQueue] = useState<GameState[]>([]);
-  const [gloomQueue, setGloomQueue] = useState<GameState[]>([]);
-  const [queuedFinal, setQueuedFinal] = useState<GameState | null>(null);
   const [adOfferOpen, setAdOfferOpen] = useState(false);
   const [adPlaying, setAdPlaying] = useState(false);
   const [pendingAd, setPendingAd] = useState<'freeReroll' | 'revive' | 'doubleCoins' | null>(
@@ -318,10 +314,6 @@ export default function PlayScreen() {
   const doRoll = async () => {
     if (busy || state.phase !== 'ready') return;
     setBusy(true);
-    setPlannedPath([]);
-    setStepQueue([]);
-    setGloomQueue([]);
-    setQueuedFinal(null);
     SoundBus.roll(sfx);
     void haptic('roll', hapOn);
     if (!reduce) {
@@ -366,64 +358,53 @@ export default function PlayScreen() {
     if (state.phase !== 'choosing') return;
     const sim = simulateWalk(state, p);
     if (!sim) return;
-    setPlannedPath(sim.path);
-    setStepQueue(sim.steps);
-    setGloomQueue(sim.gloomFrames);
-    setQueuedFinal(sim.final);
-    showToast('Path set — tap Next Move');
-  };
-
-  const doNextMove = async () => {
-    if (busy) return;
-    if (state.phase === 'ready') {
-      await doRoll();
-      return;
-    }
-    if (!stepQueue.length && !gloomQueue.length) {
-      if (state.phase === 'choosing') showToast('Tap a glowing tile first');
-      return;
-    }
     setBusy(true);
     const stepMs = reduce ? 90 : 210;
+    const gloomMs = reduce ? 120 : 380;
+    let prevHearts = state.hearts;
+    let prevGems = state.gemsCollected;
 
-    if (stepQueue.length) {
-      const [next, ...rest] = stepQueue;
-      applyStepState(next, state.hearts, state.gemsCollected);
-      setStepQueue(rest);
-      setPlannedPath((path) => path.slice(1));
-      if (next.phase === 'won' || next.phase === 'lost') {
+    for (const stepState of sim.steps) {
+      applyStepState(stepState, prevHearts, prevGems);
+      prevHearts = stepState.hearts;
+      prevGems = stepState.gemsCollected;
+      if (stepState.phase === 'won' || stepState.phase === 'lost') {
         setVisualPip(undefined);
-        setStepQueue([]);
-        setGloomQueue([]);
-        setQueuedFinal(null);
         setBusy(false);
         return;
       }
-      if (!rest.length) {
-        await new Promise((r) => setTimeout(r, reduce ? 120 : 450));
-        // run gloom frames automatically after last pip step
-        for (const frame of gloomQueue) {
-          SoundBus.gloom(sfx);
-          setState(frame);
-          if (frame.phase === 'won' || frame.phase === 'lost') {
-            setGloomQueue([]);
-            setQueuedFinal(null);
-            setVisualPip(undefined);
-            setBusy(false);
-            return;
-          }
-          await new Promise((r) => setTimeout(r, reduce ? 120 : 380));
-        }
-        if (queuedFinal) setState(queuedFinal);
-        setGloomQueue([]);
-        setQueuedFinal(null);
-        setVisualPip(undefined);
-        setPlannedPath([]);
-      }
-      setBusy(false);
-      return;
+      await new Promise((r) => setTimeout(r, stepMs));
     }
 
+    await new Promise((r) => setTimeout(r, reduce ? 120 : 450));
+    setVisualPip(undefined);
+    for (const frame of sim.gloomFrames) {
+      SoundBus.gloom(sfx);
+      if (frame.hearts < prevHearts) {
+        SoundBus.damage(sfx);
+        void haptic('damage', hapOn);
+        showFloat(frame.pip.r, frame.pip.c, 'Ouch', colors.danger);
+        prevHearts = frame.hearts;
+      }
+      const copy = floatCopy(frame.message);
+      if (copy) {
+        showFloat(
+          frame.pip.r,
+          frame.pip.c,
+          copy,
+          copy.includes('Shield') ? '#3D7BEA' : '#fff'
+        );
+        playEventSfx(frame.message);
+      }
+      setState(frame);
+      if (frame.phase === 'won' || frame.phase === 'lost') {
+        setBusy(false);
+        return;
+      }
+      await new Promise((r) => setTimeout(r, gloomMs));
+    }
+
+    setState(sim.final);
     setBusy(false);
   };
 
@@ -570,14 +551,10 @@ export default function PlayScreen() {
     );
   }
 
-  const yellowLabel =
-    state.phase === 'ready' ? 'ROLL THE DICE' : stepQueue.length ? 'Next Move' : 'Next Move';
   const statusLine =
     state.phase === 'ready'
       ? 'Tap ROLL THE DICE'
-      : plannedPath.length || stepQueue.length
-        ? `Rolled ${state.lastRoll ?? diceFace}! Path ready`
-        : `Rolled ${state.lastRoll ?? diceFace}! Tap a glowing tile.`;
+      : `Rolled ${state.lastRoll ?? diceFace}! Tap a glowing tile.`;
 
   const board = (
     <View style={[styles.boardTray, landscape && styles.boardTrayLand]}>
@@ -587,7 +564,6 @@ export default function PlayScreen() {
         visualPip={visualPip}
         floating={floating}
         showDangerOverride={showReach}
-        plannedPath={plannedPath}
         maxTile={landscape ? 72 : 84}
       />
       {tipCard ? (
@@ -627,18 +603,8 @@ export default function PlayScreen() {
             winLogged.current = false;
             setResult(null);
             setDoubled(false);
-            setPlannedPath([]);
-            setStepQueue([]);
             setState(createGame(level, { ...player.consumables }, false));
             setPaused(false);
-          }}
-        />
-        <SecondaryButton
-          label="Settings"
-          style={{ marginTop: 10 }}
-          onPress={() => {
-            setPaused(false);
-            router.push('/settings');
           }}
         />
       </GameModal>
@@ -719,8 +685,6 @@ export default function PlayScreen() {
                     return;
                   }
                   setState(useReroll(state));
-                  setPlannedPath([]);
-                  setStepQueue([]);
                 }}
               />
               <PowerRow
@@ -764,17 +728,27 @@ export default function PlayScreen() {
               >
                 <Text style={{ fontSize: 18 }}>👁</Text>
               </Pressable>
-              <Pressable
-                onPress={doNextMove}
-                disabled={busy}
-                style={[styles.nextBtn, busy && { opacity: 0.5 }]}
-              >
-                <Text style={styles.nextBtnText}>{yellowLabel}</Text>
-              </Pressable>
-              <Pressable onPress={() => router.push('/settings')} style={styles.gearBtn}>
-                <Text style={{ fontSize: 18 }}>⚙</Text>
-              </Pressable>
+              {state.phase === 'ready' ? (
+                <Pressable
+                  onPress={doRoll}
+                  disabled={busy}
+                  style={[styles.nextBtn, busy && { opacity: 0.5 }]}
+                >
+                  <Text style={styles.nextBtnText}>ROLL THE DICE</Text>
+                </Pressable>
+              ) : (
+                <View style={[styles.nextBtn, styles.nextHint]}>
+                  <Text style={styles.nextBtnText}>Tap a glowing tile</Text>
+                </View>
+              )}
             </View>
+            {state.inventory.reroll <= 0 && (
+              <Pressable onPress={() => openAd('freeReroll')} style={styles.adReroll}>
+                <Text style={styles.adRerollText}>
+                  Ad reroll{freeRerollStatus.ok ? '' : ` · ${freeRerollStatus.message}`}
+                </Text>
+              </Pressable>
+            )}
           </View>
         </View>
         {sharedModals}
@@ -816,11 +790,7 @@ export default function PlayScreen() {
             onPress={() => {
               SoundBus.click(sfx);
               if (state.inventory.reroll <= 0) openAd('freeReroll');
-              else {
-                setState(useReroll(state));
-                setPlannedPath([]);
-                setStepQueue([]);
-              }
+              else setState(useReroll(state));
             }}
           >
             <Text style={styles.orbLabel}>↺</Text>
@@ -875,13 +845,15 @@ export default function PlayScreen() {
           >
             <Text style={styles.orbLabel}>👁</Text>
           </Pressable>
-          <Pressable
-            style={[styles.orb, styles.yellowOrb]}
-            onPress={doNextMove}
-            disabled={busy}
-          >
-            <Text style={[styles.orbLabel, { color: colors.ink }]}>▶</Text>
-          </Pressable>
+          {state.phase === 'ready' ? (
+            <Pressable
+              style={[styles.orb, styles.yellowOrb]}
+              onPress={doRoll}
+              disabled={busy}
+            >
+              <Text style={[styles.orbLabel, { color: colors.ink }]}>▶</Text>
+            </Pressable>
+          ) : null}
         </View>
         {state.inventory.reroll <= 0 && (
           <Pressable onPress={() => openAd('freeReroll')} style={styles.adReroll}>
@@ -891,9 +863,6 @@ export default function PlayScreen() {
           </Pressable>
         )}
       </View>
-      <Pressable onPress={() => router.push('/settings')} style={styles.floatGear}>
-        <Text style={{ fontSize: 18, color: '#fff' }}>⚙</Text>
-      </Pressable>
       {(state.shieldActive || state.exitLocked || teleportArmed) && (
         <Panel style={{ marginTop: 8, paddingVertical: 8 }}>
           {teleportArmed && <Body>Reveal Path armed — tap a tile</Body>}
@@ -1050,14 +1019,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   eyeOn: { borderWidth: 2, borderColor: '#FFD85C' },
-  gearBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#3D7BEA',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   nextBtn: {
     flex: 1,
     backgroundColor: '#FFD85C',
@@ -1066,6 +1027,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderBottomWidth: 4,
     borderBottomColor: 'rgba(0,0,0,0.15)',
+  },
+  nextHint: {
+    backgroundColor: '#FFE9A8',
   },
   nextBtnText: { fontFamily: 'Fredoka_700Bold', color: colors.ink, fontSize: 14 },
   bottomCard: {
@@ -1128,19 +1092,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontFamily: 'Fredoka_600SemiBold',
     color: colors.ink,
-  },
-  floatGear: {
-    position: 'absolute',
-    left: 18,
-    bottom: 28,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#3D7BEA',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderBottomWidth: 4,
-    borderBottomColor: 'rgba(0,0,0,0.2)',
   },
   tipCard: {
     position: 'absolute',

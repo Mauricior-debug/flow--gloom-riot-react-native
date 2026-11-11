@@ -1,7 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   SponsoredVideoPlayer,
@@ -61,7 +61,11 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <View style={styles.content}>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+        >
           <Image source={Images.logo} style={styles.logo} />
           <Title large style={styles.brand}>
             GLOOM RIOT
@@ -118,7 +122,7 @@ export default function HomeScreen() {
           <Pressable onPress={() => router.push('/about')} style={{ marginTop: 12, marginBottom: 24 }}>
             <Text style={styles.aboutLink}>About</Text>
           </Pressable>
-        </View>
+        </ScrollView>
       </SafeAreaView>
 
       <VideoAdOfferCard
@@ -168,7 +172,7 @@ const styles = StyleSheet.create({
   },
   topRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   cloud: { fontSize: 22 },
-  content: { paddingHorizontal: 16, paddingTop: 8, flex: 1 },
+  content: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 28 },
   logo: {
     width: 88,
     height: 88,
