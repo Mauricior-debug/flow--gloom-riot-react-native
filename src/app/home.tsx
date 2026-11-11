@@ -3,14 +3,23 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { GameModal } from '../components/GameModal';
+import {
+  SponsoredVideoPlayer,
+  VideoAdOfferCard,
+} from '../components/VideoAdCard';
 import { Body, CoinPill, Panel, PrimaryButton, SecondaryButton, Title } from '../components/ui';
 import { AvatarImages, Images } from '../data/assets';
 import { getLevel } from '../data/levels';
 import { usePlayer } from '../state/PlayerContext';
 import { colors, radii } from '../theme/colors';
 
-const TILES: { label: string; href: string; icon: string; color: string; badge?: 'daily' | 'ach' }[] = [
+const TILES: {
+  label: string;
+  href: string;
+  icon: string;
+  color: string;
+  badge?: 'daily' | 'ach';
+}[] = [
   { label: 'Map', href: '/map', icon: '🗺', color: '#9BE36B' },
   { label: 'Daily gift', href: '/daily', icon: '🎁', color: '#FFD85C', badge: 'daily' },
   { label: 'Store', href: '/store', icon: '🛒', color: '#B388FF' },
@@ -24,10 +33,14 @@ const TILES: { label: string; href: string; icon: string; color: string; badge?:
 ];
 
 export default function HomeScreen() {
-  const { player, watchAd, dailyClaimable, achievementClaimable } = usePlayer();
+  const { player, watchAd, getAdStatus, dailyClaimable, achievementClaimable } = usePlayer();
   const level = getLevel(player.currentLevelId);
   const cloudLabel = player.cloudStatus === 'synced' ? 'Synced' : 'Saved on this phone';
-  const [toast, setToast] = useState<{ title: string; body: string } | null>(null);
+  const [offerOpen, setOfferOpen] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const status = getAdStatus('freeCoins');
+  const offer = (player.adOffers ?? []).find((o) => o.id === 'freeCoins');
 
   return (
     <LinearGradient colors={[...colors.sky]} style={{ flex: 1 }}>
@@ -98,24 +111,41 @@ export default function HomeScreen() {
             })}
           </View>
 
-          <SecondaryButton
-            label="Watch ad · +100 coins"
-            style={{ marginTop: 8, marginBottom: 24 }}
-            onPress={() => {
-              const r = watchAd('freeCoins');
-              setToast({ title: r.ok ? 'Reward' : 'Ads', body: r.message });
-            }}
-          />
+          <Pressable style={styles.glassAd} onPress={() => setOfferOpen(true)}>
+            <Text style={styles.glassAdText}>Free 100 coins — watch an optional video</Text>
+          </Pressable>
+
+          <Pressable onPress={() => router.push('/about')} style={{ marginTop: 12, marginBottom: 24 }}>
+            <Text style={styles.aboutLink}>About</Text>
+          </Pressable>
         </View>
       </SafeAreaView>
 
-      <GameModal
-        visible={!!toast}
-        title={toast?.title ?? ''}
-        body={toast?.body}
-        primaryLabel="OK"
-        onPrimary={() => setToast(null)}
+      <VideoAdOfferCard
+        visible={offerOpen}
+        title={offer?.name ?? 'Free 100 Coins'}
+        description={offer?.description ?? ''}
+        blockedReason={status.ok ? null : status.message}
+        onWatch={() => {
+          setOfferOpen(false);
+          setPlaying(true);
+        }}
+        onClose={() => setOfferOpen(false)}
       />
+      <SponsoredVideoPlayer
+        visible={playing}
+        onClose={() => setPlaying(false)}
+        onClaim={() => {
+          const r = watchAd('freeCoins');
+          setToast(r.message);
+          setPlaying(false);
+        }}
+      />
+      {toast ? (
+        <View style={styles.toast}>
+          <Text style={styles.toastText}>{toast}</Text>
+        </View>
+      ) : null}
     </LinearGradient>
   );
 }
@@ -195,5 +225,39 @@ const styles = StyleSheet.create({
     backgroundColor: colors.danger,
     borderWidth: 2,
     borderColor: '#fff',
+  },
+  glassAd: {
+    marginTop: 14,
+    backgroundColor: 'rgba(255,255,255,0.55)',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.9)',
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+  },
+  glassAdText: {
+    textAlign: 'center',
+    fontFamily: 'Fredoka_600SemiBold',
+    color: colors.ink,
+  },
+  aboutLink: {
+    textAlign: 'center',
+    fontFamily: 'Fredoka_600SemiBold',
+    color: colors.secondary,
+    fontSize: 15,
+  },
+  toast: {
+    position: 'absolute',
+    left: 24,
+    right: 24,
+    bottom: 40,
+    backgroundColor: 'rgba(40,28,55,0.92)',
+    borderRadius: 16,
+    padding: 12,
+  },
+  toastText: {
+    color: '#fff',
+    fontFamily: 'Fredoka_600SemiBold',
+    textAlign: 'center',
   },
 });

@@ -4,6 +4,10 @@ import { StyleSheet, Text, View } from 'react-native';
 import { GameModal } from '../components/GameModal';
 import { Screen } from '../components/Screen';
 import {
+  SponsoredVideoPlayer,
+  VideoAdOfferCard,
+} from '../components/VideoAdCard';
+import {
   BackRow,
   Body,
   CoinPill,
@@ -12,13 +16,18 @@ import {
   SecondaryButton,
   Title,
 } from '../components/ui';
-import { STORE_ITEMS } from '../data/catalog';
+import { STORE_ITEMS, StoreItem } from '../data/catalog';
 import { usePlayer } from '../state/PlayerContext';
 import { colors, radii } from '../theme/colors';
 
 export default function StoreScreen() {
-  const { player, buyStoreItem, watchAd } = usePlayer();
-  const [toast, setToast] = useState<{ title: string; body: string } | null>(null);
+  const { player, buyStoreItem, watchAd, getAdStatus } = usePlayer();
+  const [toast, setToast] = useState<string | null>(null);
+  const [checkout, setCheckout] = useState<StoreItem | null>(null);
+  const [offerOpen, setOfferOpen] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const status = getAdStatus('randomBooster');
+  const offer = (player.adOffers ?? []).find((o) => o.id === 'randomBooster');
 
   return (
     <Screen scroll>
@@ -33,11 +42,8 @@ export default function StoreScreen() {
       </Body>
 
       <SecondaryButton
-        label="Watch ad · Random Booster"
-        onPress={() => {
-          const r = watchAd('randomBooster');
-          setToast({ title: r.ok ? 'Booster' : 'Ads', body: r.message });
-        }}
+        label="Free random booster"
+        onPress={() => setOfferOpen(true)}
         style={{ marginBottom: 12 }}
       />
 
@@ -63,8 +69,12 @@ export default function StoreScreen() {
             <PrimaryButton
               label={item.coinPrice != null ? 'Buy' : 'Practice buy'}
               onPress={() => {
+                if (item.poundPrice != null && item.coinPrice == null) {
+                  setCheckout(item);
+                  return;
+                }
                 const r = buyStoreItem(item.id);
-                setToast({ title: 'Store', body: r.message });
+                setToast(r.message);
               }}
             />
           </Panel>
@@ -72,12 +82,50 @@ export default function StoreScreen() {
       </View>
 
       <GameModal
-        visible={!!toast}
-        title={toast?.title ?? ''}
-        body={toast?.body}
-        primaryLabel="OK"
-        onPrimary={() => setToast(null)}
+        visible={!!checkout}
+        title="Practice checkout"
+        body={
+          checkout
+            ? `${checkout.name} · £${checkout.poundPrice?.toFixed(2)}\nNo card will be charged.`
+            : ''
+        }
+        primaryLabel="Confirm"
+        onPrimary={() => {
+          if (!checkout) return;
+          const r = buyStoreItem(checkout.id);
+          setToast(r.ok ? `${r.message} · No card was charged` : r.message);
+          setCheckout(null);
+        }}
+        secondaryLabel="Cancel"
+        onSecondary={() => setCheckout(null)}
       />
+
+      <VideoAdOfferCard
+        visible={offerOpen}
+        title={offer?.name ?? 'Random Booster'}
+        description={offer?.description ?? ''}
+        blockedReason={status.ok ? null : status.message}
+        onWatch={() => {
+          setOfferOpen(false);
+          setPlaying(true);
+        }}
+        onClose={() => setOfferOpen(false)}
+      />
+      <SponsoredVideoPlayer
+        visible={playing}
+        onClose={() => setPlaying(false)}
+        onClaim={() => {
+          const r = watchAd('randomBooster');
+          setToast(r.message);
+          setPlaying(false);
+        }}
+      />
+
+      {toast ? (
+        <View style={styles.toast}>
+          <Text style={styles.toastText}>{toast}</Text>
+        </View>
+      ) : null}
     </Screen>
   );
 }
@@ -115,5 +163,16 @@ const styles = StyleSheet.create({
     fontFamily: 'Fredoka_600SemiBold',
     fontSize: 11,
     color: colors.ink,
+  },
+  toast: {
+    marginTop: 12,
+    backgroundColor: 'rgba(40,28,55,0.92)',
+    borderRadius: 16,
+    padding: 12,
+  },
+  toastText: {
+    color: '#fff',
+    fontFamily: 'Fredoka_600SemiBold',
+    textAlign: 'center',
   },
 });

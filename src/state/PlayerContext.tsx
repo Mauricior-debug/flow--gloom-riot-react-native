@@ -32,6 +32,13 @@ type Ctx = {
   watchAd: (
     kind: 'freeCoins' | 'freeReroll' | 'revive' | 'doubleCoins' | 'randomBooster'
   ) => { ok: boolean; message: string; reward?: Partial<PlayerState['consumables']> & { coins?: number } };
+  getAdStatus: (
+    kind: 'freeCoins' | 'freeReroll' | 'revive' | 'doubleCoins' | 'randomBooster'
+  ) => { ok: boolean; message: string };
+  updateAdOffer: (
+    id: 'freeCoins' | 'freeReroll' | 'revive' | 'doubleCoins' | 'randomBooster',
+    patch: Partial<import('../data/adOffers').AdOfferDef>
+  ) => void;
   register: (email: string, password: string, displayName: string) => { ok: boolean; message: string };
   login: (email: string, password: string) => { ok: boolean; message: string };
   logout: () => void;
@@ -59,6 +66,7 @@ function resetAdsIfNeeded(p: PlayerState): PlayerState {
       doubleCoins: { count: 0, lastAt: 0 },
       randomBooster: { count: 0, lastAt: 0 },
       dayKey: today,
+      globalCount: 0,
     },
   };
 }
@@ -314,31 +322,67 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     [update]
   );
 
+  const getAdStatus = useCallback(
+    (kind: 'freeCoins' | 'freeReroll' | 'revive' | 'doubleCoins' | 'randomBooster') => {
+      const p = resetAdsIfNeeded(player);
+      const offer = (p.adOffers ?? []).find((o) => o.id === kind);
+      if (!offer || !offer.active) return { ok: false, message: 'Offer unavailable' };
+      const slot = p.ads[kind];
+      const now = Date.now();
+      const coolMs = (offer.cooldownMinutes ?? 0) * 60 * 1000;
+      const global = p.ads.globalCount ?? 0;
+      if (global >= 15) return { ok: false, message: 'Daily video limit reached (15)' };
+      if (slot.count >= offer.dailyLimit) {
+        return { ok: false, message: `Daily limit reached (${offer.dailyLimit})` };
+      }
+      if (coolMs > 0 && now - slot.lastAt < coolMs) {
+        const mins = Math.ceil((coolMs - (now - slot.lastAt)) / 60000);
+        return { ok: false, message: `Come back in ${mins} min` };
+      }
+      return { ok: true, message: offer.rewardLabel };
+    },
+    [player]
+  );
+
   const watchAd = useCallback(
     (kind: 'freeCoins' | 'freeReroll' | 'revive' | 'doubleCoins' | 'randomBooster') => {
-      const limits: Record<typeof kind, { max: number; cool: number }> = {
-        freeCoins: { max: 5, cool: 5 * 60 * 1000 },
-        freeReroll: { max: 5, cool: 2 * 60 * 1000 },
-        revive: { max: 3, cool: 0 },
-        doubleCoins: { max: 5, cool: 0 },
-        randomBooster: { max: 3, cool: 10 * 60 * 1000 },
+      let result = {
+        ok: false,
+        message: '',
+        reward: undefined as undefined | (Partial<PlayerState['consumables']> & { coins?: number }),
       };
-      let result = { ok: false, message: '', reward: undefined as undefined | (Partial<PlayerState['consumables']> & { coins?: number }) };
-      update((p) => {
-        const slot = p.ads[kind];
-        const lim = limits[kind];
-        const now = Date.now();
-        if (slot.count >= lim.max) {
-          result = { ok: false, message: 'Daily ad limit reached', reward: undefined };
+      update((raw) => {
+        const p = resetAdsIfNeeded(raw);
+        const offer = (p.adOffers ?? []).find((o) => o.id === kind);
+        if (!offer || !offer.active) {
+          result = { ok: false, message: 'Offer unavailable', reward: undefined };
           return p;
         }
-        if (now - slot.lastAt < lim.cool) {
-          result = { ok: false, message: 'Ad cooldown active', reward: undefined };
+        const slot = p.ads[kind];
+        const now = Date.now();
+        const coolMs = (offer.cooldownMinutes ?? 0) * 60 * 1000;
+        const global = p.ads.globalCount ?? 0;
+        if (global >= 15) {
+          result = { ok: false, message: 'Daily video limit reached (15)', reward: undefined };
+          return p;
+        }
+        if (slot.count >= offer.dailyLimit) {
+          result = {
+            ok: false,
+            message: `Daily limit reached (${offer.dailyLimit})`,
+            reward: undefined,
+          };
+          return p;
+        }
+        if (coolMs > 0 && now - slot.lastAt < coolMs) {
+          const mins = Math.ceil((coolMs - (now - slot.lastAt)) / 60000);
+          result = { ok: false, message: `Come back in ${mins} min`, reward: undefined };
           return p;
         }
         const ads = {
           ...p.ads,
           [kind]: { count: slot.count + 1, lastAt: now },
+          globalCount: global + 1,
         };
         if (kind === 'freeCoins') {
           result = { ok: true, message: '+100 coins', reward: { coins: 100 } };
@@ -346,22 +390,25 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         }
         if (kind === 'freeReroll') {
           result = { ok: true, message: '+1 reroll', reward: { reroll: 1 } };
-          return { ...p, ads, consumables: { ...p.consumables, reroll: p.consumables.reroll + 1 } };
+          return {
+            ...p,
+            ads,
+            consumables: { ...p.consumables, reroll: p.consumables.reroll + 1 },
+          };
         }
         if (kind === 'revive') {
           result = { ok: true, message: 'Revive granted', reward: { revive: 1 } };
-          return { ...p, ads, consumables: { ...p.consumables, revive: p.consumables.revive + 1 } };
+          return {
+            ...p,
+            ads,
+            consumables: { ...p.consumables, revive: p.consumables.revive + 1 },
+          };
         }
         if (kind === 'doubleCoins') {
           result = { ok: true, message: 'Coins doubled', reward: undefined };
           return { ...p, ads };
         }
-        // random booster
-        const picks = [
-          { reroll: 1 },
-          { shield: 1 },
-          { moves: 1 },
-        ] as const;
+        const picks = [{ reroll: 1 }, { shield: 1 }, { moves: 1 }] as const;
         const pick = picks[Math.floor(Math.random() * picks.length)];
         result = { ok: true, message: 'Random booster!', reward: { ...pick } };
         return {
@@ -379,6 +426,19 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         };
       });
       return result;
+    },
+    [update]
+  );
+
+  const updateAdOffer = useCallback(
+    (
+      id: 'freeCoins' | 'freeReroll' | 'revive' | 'doubleCoins' | 'randomBooster',
+      patch: Partial<import('../data/adOffers').AdOfferDef>
+    ) => {
+      update((p) => ({
+        ...p,
+        adOffers: (p.adOffers ?? []).map((o) => (o.id === id ? { ...o, ...patch, id: o.id } : o)),
+      }));
     },
     [update]
   );
@@ -567,6 +627,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       clearSavedBoard,
       markTipSeen,
       watchAd,
+      getAdStatus,
+      updateAdOffer,
       register,
       login,
       logout,
@@ -596,6 +658,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       clearSavedBoard,
       markTipSeen,
       watchAd,
+      getAdStatus,
+      updateAdOffer,
       register,
       login,
       logout,

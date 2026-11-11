@@ -8,7 +8,19 @@ export async function loadPlayer(): Promise<PlayerState> {
     const raw = await AsyncStorage.getItem(KEY);
     if (!raw) return createInitialState();
     const parsed = JSON.parse(raw) as PlayerState;
-    return { ...createInitialState(), ...parsed, settings: { ...createInitialState().settings, ...parsed.settings }, consumables: { ...createInitialState().consumables, ...parsed.consumables }, stats: { ...createInitialState().stats, ...parsed.stats }, ads: { ...createInitialState().ads, ...parsed.ads }, daily: { ...createInitialState().daily, ...parsed.daily }, cosmetics: { ...createInitialState().cosmetics, ...parsed.cosmetics }, equipped: { ...createInitialState().equipped, ...parsed.equipped } };
+    const base = createInitialState();
+    return {
+      ...base,
+      ...parsed,
+      settings: { ...base.settings, ...parsed.settings },
+      consumables: { ...base.consumables, ...parsed.consumables },
+      stats: { ...base.stats, ...parsed.stats },
+      ads: { ...base.ads, ...parsed.ads },
+      daily: { ...base.daily, ...parsed.daily },
+      cosmetics: { ...base.cosmetics, ...parsed.cosmetics },
+      equipped: { ...base.equipped, ...parsed.equipped },
+      adOffers: parsed.adOffers?.length ? parsed.adOffers : base.adOffers,
+    };
   } catch {
     return createInitialState();
   }

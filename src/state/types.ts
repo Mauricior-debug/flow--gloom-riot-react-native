@@ -1,4 +1,5 @@
 import { AvatarId } from '../data/assets';
+import { AdOfferDef, DEFAULT_AD_OFFERS } from '../data/adOffers';
 
 export type Consumables = {
   reroll: number;
@@ -41,13 +42,16 @@ export type LocalProfile = {
   displayName: string;
 };
 
+export type AdSlot = { count: number; lastAt: number };
+
 export type AdCounters = {
-  freeCoins: { count: number; lastAt: number };
-  freeReroll: { count: number; lastAt: number };
-  revive: { count: number; lastAt: number };
-  doubleCoins: { count: number; lastAt: number };
-  randomBooster: { count: number; lastAt: number };
+  freeCoins: AdSlot;
+  freeReroll: AdSlot;
+  revive: AdSlot;
+  doubleCoins: AdSlot;
+  randomBooster: AdSlot;
   dayKey: string;
+  globalCount: number;
 };
 
 export type PlayerState = {
@@ -101,6 +105,7 @@ export type PlayerState = {
   loggedIn: boolean;
   cloudStatus: 'phone' | 'synced';
   ads: AdCounters;
+  adOffers: AdOfferDef[];
 };
 
 export function dayKey(d = new Date()) {
@@ -180,6 +185,8 @@ export function createInitialState(): PlayerState {
       doubleCoins: { count: 0, lastAt: 0 },
       randomBooster: { count: 0, lastAt: 0 },
       dayKey: dayKey(),
+      globalCount: 0,
     },
+    adOffers: DEFAULT_AD_OFFERS.map((o) => ({ ...o })),
   };
 }

@@ -301,12 +301,16 @@ export function BoardView({
   visualPip,
   floating,
   showDangerOverride,
+  plannedPath,
+  maxTile,
 }: {
   state: GameState;
   onSelect: (p: Pos) => void;
   visualPip?: Pos;
   floating?: { r: number; c: number; text: string; color: string } | null;
   showDangerOverride?: boolean;
+  plannedPath?: Pos[];
+  maxTile?: number;
 }) {
   const { player } = usePlayer();
   const boardSkin = player.equipped.board;
@@ -319,12 +323,16 @@ export function BoardView({
   const cols = state.cols;
   const rows = state.rows;
   const screenW = Dimensions.get('window').width;
+  const screenH = Dimensions.get('window').height;
+  const planned = new Set((plannedPath ?? []).map((p) => `${p.r},${p.c}`));
   const tile = useMemo(() => {
     const pad = 28;
     const gap = 3;
+    const cap = maxTile ?? 84;
     const maxByWidth = Math.floor((screenW - pad * 2 - gap * (cols - 1)) / cols);
-    return Math.max(36, Math.min(84, maxByWidth));
-  }, [cols, screenW]);
+    const maxByHeight = Math.floor((screenH * 0.72 - pad - gap * (rows - 1)) / rows);
+    return Math.max(34, Math.min(cap, maxByWidth, maxByHeight));
+  }, [cols, rows, screenW, screenH, maxTile]);
   const gap = 3;
   const actorSize = Math.round(tile * 0.72);
 
@@ -350,7 +358,7 @@ export function BoardView({
               }
               const k = `${r},${c}`;
               const cost = reach.get(k);
-              const glowing = cost != null;
+              const glowing = cost != null || planned.has(k);
               const danger = showDanger && gloomR.has(k);
               const gone =
                 cell.gone ||

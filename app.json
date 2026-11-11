@@ -3,7 +3,7 @@
     "name": "GLOOM RIOT",
     "slug": "gloom-riot",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "gloomriot",
     "userInterfaceStyle": "light",
@@ -28,12 +28,19 @@
     },
     "plugins": [
       "expo-router",
+      "expo-audio",
       [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",
           "resizeMode": "contain",
           "backgroundColor": "#FFF8E8"
+        }
+      ],
+      [
+        "expo-screen-orientation",
+        {
+          "orientationLock": "DEFAULT"
         }
       ]
     ],
