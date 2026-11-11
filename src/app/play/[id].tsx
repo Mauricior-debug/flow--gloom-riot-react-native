@@ -10,6 +10,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { haptic, SoundBus } from '../../audio/synth';
 import { BoardView } from '../../components/BoardView';
 import { ConfettiBurst } from '../../components/ConfettiBurst';
@@ -553,7 +554,7 @@ export default function PlayScreen() {
 
   const statusLine =
     state.phase === 'ready'
-      ? 'Tap ROLL THE DICE'
+      ? 'Tap the die to roll'
       : `Rolled ${state.lastRoll ?? diceFace}! Tap a glowing tile.`;
 
   const board = (
@@ -646,7 +647,7 @@ export default function PlayScreen() {
 
   if (landscape) {
     return (
-      <View style={styles.landRoot}>
+      <SafeAreaView style={styles.landRoot} edges={['top', 'left', 'right', 'bottom']}>
         <TopBar
           levelName={level.name}
           objective={level.objective}
@@ -659,17 +660,26 @@ export default function PlayScreen() {
           <View style={styles.landBoardCol}>{board}</View>
           <View style={styles.landSide}>
             <LinearGradient colors={['#5B3FD1', '#3A2A7A']} style={styles.dieCard}>
-              <Animated.View
-                style={[styles.bigDie, { transform: [{ translateY: hop }, { rotate: spin }] }]}
+              <Pressable
+                onPress={doRoll}
+                disabled={busy || state.phase !== 'ready'}
+                style={{ opacity: state.phase === 'ready' && !busy ? 1 : 0.85 }}
               >
-                <Text style={styles.sparkle}>✦</Text>
-                <Text style={styles.bigDieFace}>{diceFace}</Text>
-              </Animated.View>
+                <Animated.View
+                  style={[styles.bigDie, { transform: [{ translateY: hop }, { rotate: spin }] }]}
+                >
+                  <Text style={styles.sparkle}>✦</Text>
+                  <Text style={styles.bigDieFace}>{diceFace}</Text>
+                </Animated.View>
+              </Pressable>
               <Text style={styles.rolledLabel}>Rolled</Text>
               <Text style={styles.hugeNum}>{state.lastRoll ?? diceFace}</Text>
               <View style={styles.movesPill}>
                 <Text style={styles.movesPillText}>Moves left · {state.movesLeft}</Text>
               </View>
+              {state.phase === 'ready' ? (
+                <Text style={styles.tapDieHint}>Tap the die to roll</Text>
+              ) : null}
             </LinearGradient>
 
             <View style={styles.powerCard}>
@@ -728,19 +738,11 @@ export default function PlayScreen() {
               >
                 <Text style={{ fontSize: 18 }}>👁</Text>
               </Pressable>
-              {state.phase === 'ready' ? (
-                <Pressable
-                  onPress={doRoll}
-                  disabled={busy}
-                  style={[styles.nextBtn, busy && { opacity: 0.5 }]}
-                >
-                  <Text style={styles.nextBtnText}>ROLL THE DICE</Text>
-                </Pressable>
-              ) : (
-                <View style={[styles.nextBtn, styles.nextHint]}>
-                  <Text style={styles.nextBtnText}>Tap a glowing tile</Text>
-                </View>
-              )}
+              <View style={[styles.nextBtn, styles.nextHint]}>
+                <Text style={styles.nextBtnText}>
+                  {state.phase === 'ready' ? 'Tap the die to roll' : 'Tap a glowing tile'}
+                </Text>
+              </View>
             </View>
             {state.inventory.reroll <= 0 && (
               <Pressable onPress={() => openAd('freeReroll')} style={styles.adReroll}>
@@ -752,13 +754,22 @@ export default function PlayScreen() {
           </View>
         </View>
         {sharedModals}
-      </View>
+      </SafeAreaView>
     );
   }
 
-  // Portrait / upright
+  // Portrait / upright — fixed full-screen chrome (no scroll)
+  const portraitBudget = Math.min(width - 36, height * 0.52);
+  const portraitTile = Math.max(
+    34,
+    Math.min(
+      78,
+      Math.floor((portraitBudget - 20) / Math.max(state.cols, state.rows))
+    )
+  );
+
   return (
-    <Screen scroll contentStyle={{ paddingBottom: 24 }}>
+    <SafeAreaView style={styles.portRoot} edges={['top', 'left', 'right', 'bottom']}>
       <TopBar
         levelName={level.name}
         objective={level.objective}
@@ -766,20 +777,45 @@ export default function PlayScreen() {
         gems={state.gemsCollected}
         gemsTotal={state.gemsTotal}
         onPause={() => setPaused(true)}
-        compact
       />
       <Text style={styles.statusLine}>{statusLine}</Text>
-      {board}
+      <View style={styles.portBoardWrap}>
+        <View style={styles.boardTray}>
+          <BoardView
+            state={state}
+            onSelect={onSelect}
+            visualPip={visualPip}
+            floating={floating}
+            showDangerOverride={showReach}
+            maxTile={portraitTile}
+          />
+          {tipCard ? (
+            <View style={styles.tipCard}>
+              <Text style={styles.tipTitle}>Tip</Text>
+              <Text style={styles.tipBody}>{tipCard}</Text>
+              <Pressable onPress={() => setTipCard(null)}>
+                <Text style={styles.tipDismiss}>Got it</Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
+      </View>
       <View style={styles.bottomCard}>
         <View style={styles.bottomRow}>
-          <Animated.View
-            style={[styles.die, { transform: [{ translateY: hop }, { rotate: spin }] }]}
+          <Pressable
+            onPress={doRoll}
+            disabled={busy || state.phase !== 'ready'}
+            style={{ opacity: state.phase === 'ready' && !busy ? 1 : 0.9 }}
           >
-            <Text style={styles.dieFace}>{diceFace}</Text>
-          </Animated.View>
+            <Animated.View
+              style={[styles.die, { transform: [{ translateY: hop }, { rotate: spin }] }]}
+            >
+              <Text style={styles.dieFace}>{diceFace}</Text>
+            </Animated.View>
+          </Pressable>
           <View style={{ flex: 1 }}>
             <Text style={styles.hintTitle}>
-              {state.phase === 'ready' ? 'Roll when ready' : 'Tap a glowing tile'}
+              {state.phase === 'ready' ? 'Tap the die to roll' : 'Tap a glowing tile'}
             </Text>
             <Text style={styles.hintMoves}>Moves left: {state.movesLeft}</Text>
           </View>
@@ -845,15 +881,6 @@ export default function PlayScreen() {
           >
             <Text style={styles.orbLabel}>👁</Text>
           </Pressable>
-          {state.phase === 'ready' ? (
-            <Pressable
-              style={[styles.orb, styles.yellowOrb]}
-              onPress={doRoll}
-              disabled={busy}
-            >
-              <Text style={[styles.orbLabel, { color: colors.ink }]}>▶</Text>
-            </Pressable>
-          ) : null}
         </View>
         {state.inventory.reroll <= 0 && (
           <Pressable onPress={() => openAd('freeReroll')} style={styles.adReroll}>
@@ -862,20 +889,20 @@ export default function PlayScreen() {
             </Text>
           </Pressable>
         )}
+        {(state.shieldActive || state.exitLocked || teleportArmed) && (
+          <View style={{ marginTop: 8 }}>
+            {teleportArmed && <Body>Reveal Path armed — tap a tile</Body>}
+            {state.shieldActive && <Body>Shield active</Body>}
+            {state.exitLocked && (
+              <Body>
+                EXIT locked · switches {state.switchesPressed}/{state.switchTotal}
+              </Body>
+            )}
+          </View>
+        )}
       </View>
-      {(state.shieldActive || state.exitLocked || teleportArmed) && (
-        <Panel style={{ marginTop: 8, paddingVertical: 8 }}>
-          {teleportArmed && <Body>Reveal Path armed — tap a tile</Body>}
-          {state.shieldActive && <Body>Shield active</Body>}
-          {state.exitLocked && (
-            <Body>
-              EXIT locked · switches {state.switchesPressed}/{state.switchTotal}
-            </Body>
-          )}
-        </Panel>
-      )}
       {sharedModals}
-    </Screen>
+    </SafeAreaView>
   );
 }
 
@@ -883,22 +910,45 @@ const styles = StyleSheet.create({
   landRoot: {
     flex: 1,
     backgroundColor: '#FFF8E8',
-    paddingTop: 8,
+    paddingTop: 4,
     paddingHorizontal: 10,
-    paddingBottom: 8,
+    paddingBottom: 4,
   },
   landBody: { flex: 1, flexDirection: 'row', gap: 10 },
   landBoardCol: { flex: 1.35, justifyContent: 'center' },
   landSide: { width: 250, gap: 8 },
+  portRoot: {
+    flex: 1,
+    backgroundColor: '#FFF8E8',
+    paddingHorizontal: 12,
+    paddingTop: 4,
+    paddingBottom: 8,
+  },
+  portBoardWrap: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: 0,
+  },
   boardTray: {
     alignSelf: 'center',
-    backgroundColor: 'rgba(255,255,255,0.7)',
+    backgroundColor: 'rgba(255,255,255,0.88)',
     borderRadius: 28,
     borderWidth: 3,
     borderColor: '#fff',
     padding: 8,
+    shadowColor: '#5c3a1c',
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
   },
   boardTrayLand: { alignSelf: 'stretch', flex: 1, justifyContent: 'center' },
+  tapDieHint: {
+    marginTop: 8,
+    color: 'rgba(255,255,255,0.9)',
+    fontFamily: 'Fredoka_600SemiBold',
+    fontSize: 12,
+  },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
