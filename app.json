@@ -40,6 +40,13 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "owner": "naza123",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "a1e40879-a3f4-46c1-bdea-2a97a1af9de7"
+      }
     }
   }
 }
