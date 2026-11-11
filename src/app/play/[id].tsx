@@ -557,27 +557,9 @@ export default function PlayScreen() {
       ? 'Tap the die to roll'
       : `Rolled ${state.lastRoll ?? diceFace}! Tap a glowing tile.`;
 
-  const board = (
-    <View style={[styles.boardTray, landscape && styles.boardTrayLand]}>
-      <BoardView
-        state={state}
-        onSelect={onSelect}
-        visualPip={visualPip}
-        floating={floating}
-        showDangerOverride={showReach}
-        maxTile={landscape ? 72 : 84}
-      />
-      {tipCard ? (
-        <View style={styles.tipCard}>
-          <Text style={styles.tipTitle}>Tip</Text>
-          <Text style={styles.tipBody}>{tipCard}</Text>
-          <Pressable onPress={() => setTipCard(null)}>
-            <Text style={styles.tipDismiss}>Got it</Text>
-          </Pressable>
-        </View>
-      ) : null}
-    </View>
-  );
+  const sideW = Math.min(210, Math.max(180, Math.floor(width * 0.28)));
+  const landBoardMaxW = width - sideW - 28;
+  const landBoardMaxH = height - 64;
 
   const sharedModals = (
     <>
@@ -655,38 +637,67 @@ export default function PlayScreen() {
           gems={state.gemsCollected}
           gemsTotal={state.gemsTotal}
           onPause={() => setPaused(true)}
+          compact
         />
         <View style={styles.landBody}>
-          <View style={styles.landBoardCol}>{board}</View>
-          <View style={styles.landSide}>
-            <LinearGradient colors={['#5B3FD1', '#3A2A7A']} style={styles.dieCard}>
-              <Pressable
-                onPress={doRoll}
-                disabled={busy || state.phase !== 'ready'}
-                style={{ opacity: state.phase === 'ready' && !busy ? 1 : 0.85 }}
-              >
-                <Animated.View
-                  style={[styles.bigDie, { transform: [{ translateY: hop }, { rotate: spin }] }]}
-                >
-                  <Text style={styles.sparkle}>✦</Text>
-                  <Text style={styles.bigDieFace}>{diceFace}</Text>
-                </Animated.View>
-              </Pressable>
-              <Text style={styles.rolledLabel}>Rolled</Text>
-              <Text style={styles.hugeNum}>{state.lastRoll ?? diceFace}</Text>
-              <View style={styles.movesPill}>
-                <Text style={styles.movesPillText}>Moves left · {state.movesLeft}</Text>
-              </View>
-              {state.phase === 'ready' ? (
-                <Text style={styles.tapDieHint}>Tap the die to roll</Text>
+          <View style={styles.landBoardCol}>
+            <View style={[styles.boardTray, styles.boardTrayLand]}>
+              <BoardView
+                state={state}
+                onSelect={onSelect}
+                visualPip={visualPip}
+                floating={floating}
+                showDangerOverride={showReach}
+                maxWidth={landBoardMaxW}
+                maxHeight={landBoardMaxH}
+                maxTile={64}
+              />
+              {tipCard ? (
+                <View style={styles.tipCard}>
+                  <Text style={styles.tipTitle}>Tip</Text>
+                  <Text style={styles.tipBody}>{tipCard}</Text>
+                  <Pressable onPress={() => setTipCard(null)}>
+                    <Text style={styles.tipDismiss}>Got it</Text>
+                  </Pressable>
+                </View>
               ) : null}
+            </View>
+          </View>
+
+          <View style={[styles.landSide, { width: sideW }]}>
+            <LinearGradient colors={['#5B3FD1', '#3A2A7A']} style={styles.dieCardLand}>
+              <View style={styles.dieCardRow}>
+                <Pressable
+                  onPress={doRoll}
+                  disabled={busy || state.phase !== 'ready'}
+                  style={{ opacity: state.phase === 'ready' && !busy ? 1 : 0.85 }}
+                >
+                  <Animated.View
+                    style={[styles.bigDieLand, { transform: [{ translateY: hop }, { rotate: spin }] }]}
+                  >
+                    <Text style={styles.sparkle}>✦</Text>
+                    <Text style={styles.bigDieFaceLand}>{diceFace}</Text>
+                  </Animated.View>
+                </Pressable>
+                <View style={{ flex: 1, paddingLeft: 8 }}>
+                  <Text style={styles.rolledLabel}>Rolled</Text>
+                  <Text style={styles.hugeNumLand}>{state.lastRoll ?? diceFace}</Text>
+                </View>
+              </View>
+              <View style={styles.movesPill}>
+                <Text style={styles.movesPillText}>
+                  {state.phase === 'ready'
+                    ? 'Tap die to roll'
+                    : `Moves left · ${state.movesLeft}`}
+                </Text>
+              </View>
             </LinearGradient>
 
             <View style={styles.powerCard}>
               <Text style={styles.powerTitle}>Power-ups</Text>
               <PowerRow
                 icon="↺"
-                name="Reroll Tile"
+                name="Reroll"
                 count={state.inventory.reroll}
                 onPress={() => {
                   SoundBus.click(sfx);
@@ -708,7 +719,7 @@ export default function PlayScreen() {
               />
               <PowerRow
                 icon="+2"
-                name="Extra Moves"
+                name="+2 Moves"
                 count={state.inventory.moves}
                 onPress={() => {
                   SoundBus.click(sfx);
@@ -717,7 +728,7 @@ export default function PlayScreen() {
               />
               <PowerRow
                 icon="✧"
-                name="Reveal Path"
+                name="Reveal"
                 count={state.inventory.teleport}
                 onPress={() => {
                   SoundBus.click(sfx);
@@ -738,19 +749,18 @@ export default function PlayScreen() {
               >
                 <Text style={{ fontSize: 18 }}>👁</Text>
               </Pressable>
-              <View style={[styles.nextBtn, styles.nextHint]}>
-                <Text style={styles.nextBtnText}>
-                  {state.phase === 'ready' ? 'Tap the die to roll' : 'Tap a glowing tile'}
+              {state.inventory.reroll <= 0 ? (
+                <Pressable onPress={() => openAd('freeReroll')} style={styles.adRerollLand}>
+                  <Text style={styles.adRerollText} numberOfLines={1}>
+                    Ad reroll
+                  </Text>
+                </Pressable>
+              ) : (
+                <Text style={styles.landHint} numberOfLines={1}>
+                  {state.phase === 'ready' ? 'Tap die to roll' : 'Tap a glowing tile'}
                 </Text>
-              </View>
+              )}
             </View>
-            {state.inventory.reroll <= 0 && (
-              <Pressable onPress={() => openAd('freeReroll')} style={styles.adReroll}>
-                <Text style={styles.adRerollText}>
-                  Ad reroll{freeRerollStatus.ok ? '' : ` · ${freeRerollStatus.message}`}
-                </Text>
-              </Pressable>
-            )}
           </View>
         </View>
         {sharedModals}
@@ -788,6 +798,8 @@ export default function PlayScreen() {
             floating={floating}
             showDangerOverride={showReach}
             maxTile={portraitTile}
+            maxWidth={width - 36}
+            maxHeight={height * 0.55}
           />
           {tipCard ? (
             <View style={styles.tipCard}>
@@ -910,13 +922,19 @@ const styles = StyleSheet.create({
   landRoot: {
     flex: 1,
     backgroundColor: '#FFF8E8',
-    paddingTop: 4,
-    paddingHorizontal: 10,
-    paddingBottom: 4,
+    paddingTop: 2,
+    paddingHorizontal: 8,
+    paddingBottom: 2,
   },
-  landBody: { flex: 1, flexDirection: 'row', gap: 10 },
-  landBoardCol: { flex: 1.35, justifyContent: 'center' },
-  landSide: { width: 250, gap: 8 },
+  landBody: { flex: 1, flexDirection: 'row', gap: 8, minHeight: 0 },
+  landBoardCol: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  landSide: { gap: 6, flexShrink: 0 },
   portRoot: {
     flex: 1,
     backgroundColor: '#FFF8E8',
@@ -933,21 +951,48 @@ const styles = StyleSheet.create({
   boardTray: {
     alignSelf: 'center',
     backgroundColor: 'rgba(255,255,255,0.88)',
-    borderRadius: 28,
+    borderRadius: 24,
     borderWidth: 3,
     borderColor: '#fff',
-    padding: 8,
+    padding: 6,
     shadowColor: '#5c3a1c',
     shadowOpacity: 0.12,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
   },
-  boardTrayLand: { alignSelf: 'stretch', flex: 1, justifyContent: 'center' },
-  tapDieHint: {
-    marginTop: 8,
-    color: 'rgba(255,255,255,0.9)',
+  boardTrayLand: {
+    alignSelf: 'center',
+    maxWidth: '100%',
+  },
+  dieCardLand: {
+    borderRadius: 18,
+    padding: 10,
+  },
+  dieCardRow: { flexDirection: 'row', alignItems: 'center' },
+  bigDieLand: {
+    width: 56,
+    height: 56,
+    borderRadius: 14,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderBottomWidth: 4,
+    borderBottomColor: 'rgba(0,0,0,0.15)',
+  },
+  bigDieFaceLand: { fontFamily: 'Fredoka_700Bold', fontSize: 28, color: colors.ink },
+  hugeNumLand: { color: '#fff', fontFamily: 'Fredoka_700Bold', fontSize: 32, lineHeight: 36 },
+  landHint: {
+    flex: 1,
     fontFamily: 'Fredoka_600SemiBold',
+    color: colors.ink,
     fontSize: 12,
+  },
+  adRerollLand: {
+    flex: 1,
+    backgroundColor: '#FFE0F0',
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
   },
   topBar: {
     flexDirection: 'row',
@@ -1023,65 +1068,53 @@ const styles = StyleSheet.create({
   movesPillText: { fontFamily: 'Fredoka_600SemiBold', color: colors.ink, fontSize: 12 },
   powerCard: {
     backgroundColor: '#FFF4D9',
-    borderRadius: 20,
-    borderWidth: 3,
+    borderRadius: 16,
+    borderWidth: 2,
     borderColor: '#fff',
-    padding: 10,
+    padding: 8,
     flex: 1,
+    minHeight: 0,
   },
   powerTitle: {
     fontFamily: 'Fredoka_700Bold',
     color: colors.ink,
-    marginBottom: 6,
-    fontSize: 16,
+    marginBottom: 2,
+    fontSize: 14,
   },
   powerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 6,
+    gap: 6,
+    paddingVertical: 3,
   },
   powerIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: '#7B3FE4',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  powerName: { flex: 1, fontFamily: 'Fredoka_600SemiBold', color: colors.ink, fontSize: 13 },
+  powerName: { flex: 1, fontFamily: 'Fredoka_600SemiBold', color: colors.ink, fontSize: 12 },
   playCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     backgroundColor: '#FFD85C',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  playCircleText: { color: colors.ink, fontSize: 11, fontFamily: 'Fredoka_700Bold' },
+  playCircleText: { color: colors.ink, fontSize: 10, fontFamily: 'Fredoka_700Bold' },
   landActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   eyeBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#1FA6C9',
     alignItems: 'center',
     justifyContent: 'center',
   },
   eyeOn: { borderWidth: 2, borderColor: '#FFD85C' },
-  nextBtn: {
-    flex: 1,
-    backgroundColor: '#FFD85C',
-    borderRadius: 18,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderBottomWidth: 4,
-    borderBottomColor: 'rgba(0,0,0,0.15)',
-  },
-  nextHint: {
-    backgroundColor: '#FFE9A8',
-  },
-  nextBtnText: { fontFamily: 'Fredoka_700Bold', color: colors.ink, fontSize: 14 },
   bottomCard: {
     marginTop: 12,
     backgroundColor: '#FFF4D9',

@@ -303,6 +303,8 @@ export function BoardView({
   showDangerOverride,
   plannedPath,
   maxTile,
+  maxWidth,
+  maxHeight,
 }: {
   state: GameState;
   onSelect: (p: Pos) => void;
@@ -311,6 +313,8 @@ export function BoardView({
   showDangerOverride?: boolean;
   plannedPath?: Pos[];
   maxTile?: number;
+  maxWidth?: number;
+  maxHeight?: number;
 }) {
   const { player } = usePlayer();
   const boardSkin = player.equipped.board;
@@ -326,13 +330,15 @@ export function BoardView({
   const screenH = Dimensions.get('window').height;
   const planned = new Set((plannedPath ?? []).map((p) => `${p.r},${p.c}`));
   const tile = useMemo(() => {
-    const pad = 28;
     const gap = 3;
+    const pad = 16;
     const cap = maxTile ?? 84;
-    const maxByWidth = Math.floor((screenW - pad * 2 - gap * (cols - 1)) / cols);
-    const maxByHeight = Math.floor((screenH * 0.72 - pad - gap * (rows - 1)) / rows);
-    return Math.max(34, Math.min(cap, maxByWidth, maxByHeight));
-  }, [cols, rows, screenW, screenH, maxTile]);
+    const availW = (maxWidth ?? screenW) - pad;
+    const availH = (maxHeight ?? screenH * 0.72) - pad;
+    const maxByWidth = Math.floor((availW - gap * (cols - 1)) / cols);
+    const maxByHeight = Math.floor((availH - gap * (rows - 1)) / rows);
+    return Math.max(28, Math.min(cap, maxByWidth, maxByHeight));
+  }, [cols, rows, screenW, screenH, maxTile, maxWidth, maxHeight]);
   const gap = 3;
   const actorSize = Math.round(tile * 0.72);
 
