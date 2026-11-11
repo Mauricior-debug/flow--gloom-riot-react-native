@@ -86,6 +86,11 @@ export type PlayerState = {
     reduceMotion: boolean;
     largeText: boolean;
     highContrast: boolean;
+    musicVolume: number;
+    sfxVolume: number;
+    haptics: boolean;
+    showDangerTiles: boolean;
+    starlightNotify: boolean;
   };
   eventBanner: string;
   coinRewardMultiplier: number;
@@ -151,6 +156,11 @@ export function createInitialState(): PlayerState {
       reduceMotion: false,
       largeText: false,
       highContrast: false,
+      musicVolume: 50,
+      sfxVolume: 80,
+      haptics: true,
+      showDangerTiles: true,
+      starlightNotify: false,
     },
     eventBanner: '',
     coinRewardMultiplier: 1,
