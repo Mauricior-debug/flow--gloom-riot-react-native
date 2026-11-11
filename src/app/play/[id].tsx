@@ -1,32 +1,97 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import {
+  Alert,
+  Animated,
+  Easing,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { haptic, SoundBus } from '../../audio/synth';
 import { BoardView } from '../../components/BoardView';
 import { Screen } from '../../components/Screen';
 import {
-  BackRow,
   Body,
   Panel,
   PrimaryButton,
   SecondaryButton,
   Title,
 } from '../../components/ui';
-import { TIPS } from '../../data/tips';
 import { getLevel } from '../../data/levels';
+import { TIPS } from '../../data/tips';
 import { createGame } from '../../engine/board';
 import {
-  chooseMove,
   rollDice,
   scoreResult,
+  simulateWalk,
   useExtraMoves,
-  useLucky,
   useReroll,
   useRevive,
   useShield,
+  useTeleportBoost,
 } from '../../engine/game';
 import { GameState, Pos } from '../../engine/types';
 import { usePlayer } from '../../state/PlayerContext';
-import { colors } from '../../theme/colors';
+import { colors, radii } from '../../theme/colors';
+
+function ChubbyButton({
+  label,
+  onPress,
+  disabled,
+  tone = 'gold',
+  style,
+}: {
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+  tone?: 'gold' | 'purple' | 'teal';
+  style?: object;
+}) {
+  const y = useRef(new Animated.Value(0)).current;
+  const colorsFor: readonly [string, string] =
+    tone === 'gold'
+      ? ['#FFD85C', '#E8A800']
+      : tone === 'purple'
+        ? ['#B388FF', '#7B3FE4']
+        : ['#5EE0D0', '#1FA6C9'];
+  return (
+    <Pressable
+      disabled={disabled}
+      onPressIn={() => Animated.timing(y, { toValue: 5, duration: 60, useNativeDriver: true }).start()}
+      onPressOut={() => Animated.timing(y, { toValue: 0, duration: 80, useNativeDriver: true }).start()}
+      onPress={onPress}
+      style={[{ opacity: disabled ? 0.45 : 1 }, style]}
+    >
+      <Animated.View style={{ transform: [{ translateY: y }] }}>
+        <LinearGradient colors={colorsFor} style={styles.chubby}>
+          <Text style={styles.chubbyText}>{label}</Text>
+        </LinearGradient>
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+function PowerOrb({
+  label,
+  count,
+  onPress,
+}: {
+  label: string;
+  count: number;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable onPress={onPress} style={styles.orb}>
+      <Text style={styles.orbLabel}>{label}</Text>
+      <View style={styles.badge}>
+        <Text style={styles.badgeText}>{count}</Text>
+      </View>
+    </Pressable>
+  );
+}
 
 export default function PlayScreen() {
   const { id, resume } = useLocalSearchParams<{ id: string; resume?: string }>();
@@ -42,6 +107,11 @@ export default function PlayScreen() {
   } = usePlayer();
   const level = getLevel(id);
   const winLogged = useRef(false);
+  const soundOn = player.settings.sound;
+  const sfx = soundOn ? player.settings.sfxVolume ?? 80 : 0;
+  const music = soundOn ? player.settings.musicVolume ?? 50 : 0;
+  const reduce = player.settings.reduceMotion;
+  const hapOn = player.settings.haptics ?? true;
 
   const initial = useMemo(() => {
     if (!level) return null;
@@ -49,15 +119,7 @@ export default function PlayScreen() {
       return player.savedBoard.snapshot as GameState;
     }
     const useHead = player.consumables.headStart > 0;
-    const inv = {
-      reroll: player.consumables.reroll,
-      shield: player.consumables.shield,
-      moves: player.consumables.moves,
-      revive: player.consumables.revive,
-      teleport: player.consumables.teleport,
-      lucky: player.consumables.lucky,
-      headStart: player.consumables.headStart,
-    };
+    const inv = { ...player.consumables };
     const g = createGame(level, inv, useHead);
     if (useHead) {
       g.inventory.headStart = Math.max(0, g.inventory.headStart - 1);
@@ -69,6 +131,29 @@ export default function PlayScreen() {
   const [state, setState] = useState<GameState | null>(initial);
   const [result, setResult] = useState<ReturnType<typeof scoreResult> | null>(null);
   const [doubled, setDoubled] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [visualPip, setVisualPip] = useState<Pos | undefined>();
+  const [floating, setFloating] = useState<{
+    r: number;
+    c: number;
+    text: string;
+    color: string;
+  } | null>(null);
+  const [diceFace, setDiceFace] = useState(1);
+  const [rolling, setRolling] = useState(false);
+  const [teleportArmed, setTeleportArmed] = useState(false);
+  const diceAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (music > 0) SoundBus.startMusic(music);
+    else SoundBus.stopMusic();
+    return () => SoundBus.stopMusic();
+  }, []);
+
+  useEffect(() => {
+    SoundBus.setMusicVolume(music);
+    if (music <= 0) SoundBus.stopMusic();
+  }, [music]);
 
   useEffect(() => {
     if (!state || !level) return;
@@ -82,34 +167,22 @@ export default function PlayScreen() {
   }, [state?.turn]);
 
   useEffect(() => {
-    if (!state || state.phase === 'won' || state.phase === 'lost') return;
+    if (!state || state.phase === 'won' || state.phase === 'lost' || busy) return;
     saveBoard(id, state);
-  }, [state]);
-
-  if (!level || !state) {
-    return (
-      <Screen>
-        <BackRow title="Play" onBack={() => router.back()} />
-        <Body>Level missing.</Body>
-      </Screen>
-    );
-  }
-
-  const onSelect = (p: Pos) => {
-    if (state.phase !== 'choosing') return;
-    setState(chooseMove(state, p));
-  };
+  }, [state, busy]);
 
   useEffect(() => {
     if (!state) return;
     if (state.phase === 'won' && !result && !winLogged.current) {
       winLogged.current = true;
+      SoundBus.win(sfx);
+      void haptic('win', hapOn);
       syncConsumables(state.inventory);
       const scored = scoreResult(state);
       setResult(scored);
       clearSavedBoard();
       applyLevelWin({
-        levelId: level.id,
+        levelId: level!.id,
         stars: scored.stars,
         score: scored.score,
         coins: scored.coins,
@@ -119,9 +192,159 @@ export default function PlayScreen() {
       });
     }
     if (state.phase === 'lost') {
+      SoundBus.lose(sfx);
       syncConsumables(state.inventory);
     }
   }, [state?.phase]);
+
+  if (!level || !state) {
+    return (
+      <Screen>
+        <Body>Level missing.</Body>
+      </Screen>
+    );
+  }
+
+  const showFloat = (r: number, c: number, text: string, color: string) => {
+    setFloating({ r, c, text, color });
+    setTimeout(() => setFloating(null), reduce ? 220 : 500);
+  };
+
+  const doRoll = async () => {
+    if (busy || state.phase !== 'ready') return;
+    setBusy(true);
+    SoundBus.roll(sfx);
+    void haptic('roll', hapOn);
+    if (!reduce) {
+      setRolling(true);
+      const tumble = Animated.timing(diceAnim, {
+        toValue: 1,
+        duration: 750,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      });
+      const flicker = setInterval(() => {
+        setDiceFace(1 + Math.floor(Math.random() * 6));
+      }, 70);
+      tumble.start(() => {
+        clearInterval(flicker);
+        setRolling(false);
+        diceAnim.setValue(0);
+      });
+      await new Promise((r) => setTimeout(r, 750));
+    }
+    const next = rollDice(state);
+    setDiceFace(next.lastRoll ?? 1);
+    setState(next);
+    setBusy(false);
+  };
+
+  const playEventSfx = (msg: string) => {
+    const m = msg.toLowerCase();
+    if (m.includes('switch') || m.includes('exit unlock')) SoundBus.switch(sfx);
+    if (m.includes('teleport') || m.includes('hop') || m.includes('whoosh') || m.includes('warp')) {
+      SoundBus.warp(sfx);
+    }
+    if (
+      m.includes('shield') ||
+      m.includes('reroll') ||
+      m.includes('+2') ||
+      m.includes('power') ||
+      m.includes('got a')
+    ) {
+      SoundBus.power(sfx);
+    }
+    if (m.includes('stomp')) SoundBus.damage(sfx);
+    if (m.includes('summon')) SoundBus.power(sfx);
+  };
+
+  const onSelect = async (p: Pos) => {
+    if (busy) return;
+
+    if (teleportArmed) {
+      setBusy(true);
+      setTeleportArmed(false);
+      SoundBus.warp(sfx);
+      const next = useTeleportBoost(state, p);
+      setState(next);
+      setBusy(false);
+      return;
+    }
+
+    if (state.phase !== 'choosing') return;
+    const sim = simulateWalk(state, p);
+    if (!sim) return;
+    setBusy(true);
+    const stepMs = reduce ? 90 : 210;
+    const gloomMs = reduce ? 120 : 380;
+    let prevHearts = state.hearts;
+    let prevGems = state.gemsCollected;
+    let prevMsg = state.message;
+
+    for (const stepState of sim.steps) {
+      setVisualPip(stepState.pip);
+      setState(stepState);
+      SoundBus.step(sfx);
+      void haptic('step', hapOn);
+      if (stepState.gemsCollected > prevGems) {
+        SoundBus.gem(sfx);
+        showFloat(stepState.pip.r, stepState.pip.c, '+★', '#E8A800');
+        prevGems = stepState.gemsCollected;
+      }
+      if (stepState.hearts < prevHearts) {
+        SoundBus.damage(sfx);
+        void haptic('damage', hapOn);
+        showFloat(stepState.pip.r, stepState.pip.c, '-♥', colors.danger);
+        prevHearts = stepState.hearts;
+      }
+      if (stepState.message !== prevMsg) {
+        playEventSfx(stepState.message);
+        if (stepState.message.toLowerCase().includes('shield saved')) {
+          showFloat(stepState.pip.r, stepState.pip.c, 'Blocked!', '#3D7BEA');
+        } else if (stepState.message && !stepState.message.startsWith('Rolled')) {
+          showFloat(stepState.pip.r, stepState.pip.c, stepState.message, '#fff');
+        }
+        prevMsg = stepState.message;
+      }
+      if (stepState.phase === 'won' || stepState.phase === 'lost') {
+        setVisualPip(undefined);
+        setState(stepState);
+        setBusy(false);
+        return;
+      }
+      await new Promise((r) => setTimeout(r, stepMs));
+    }
+
+    // Gloom turn feel: pause, then step each gloom tile
+    await new Promise((r) => setTimeout(r, reduce ? 120 : 450));
+    setVisualPip(undefined);
+    let lastGloomMsg = prevMsg;
+    for (const frame of sim.gloomFrames) {
+      SoundBus.gloom(sfx);
+      if (frame.message !== lastGloomMsg) {
+        playEventSfx(frame.message);
+        if (frame.message.toLowerCase().includes('shield saved')) {
+          showFloat(frame.pip.r, frame.pip.c, 'Blocked!', '#3D7BEA');
+        }
+        if (frame.hearts < prevHearts) {
+          SoundBus.damage(sfx);
+          void haptic('damage', hapOn);
+          showFloat(frame.pip.r, frame.pip.c, '-♥', colors.danger);
+          prevHearts = frame.hearts;
+        }
+        lastGloomMsg = frame.message;
+      }
+      setState(frame);
+      if (frame.phase === 'won' || frame.phase === 'lost') {
+        setBusy(false);
+        return;
+      }
+      await new Promise((r) => setTimeout(r, gloomMs));
+    }
+
+    setState(sim.final);
+    setBusy(false);
+  };
 
   if (state.phase === 'won' && result) {
     const coins = doubled ? result.coins * 2 : result.coins;
@@ -132,9 +355,6 @@ export default function PlayScreen() {
           <Body>Stars {'★'.repeat(result.stars)}{'☆'.repeat(3 - result.stars)}</Body>
           <Body style={{ marginTop: 6 }}>Score {result.score}</Body>
           <Body style={{ marginTop: 6 }}>Coins +{coins}</Body>
-          <Body style={{ marginTop: 6 }}>
-            Gems {state.gemsCollected}/{state.gemsTotal} · Turns {state.turn} / par {state.par}
-          </Body>
         </Panel>
         <SecondaryButton
           label="Watch ad · Double coins"
@@ -144,16 +364,10 @@ export default function PlayScreen() {
             if (r.ok && !doubled) {
               setDoubled(true);
               addCoins(result.coins);
-            } else if (!r.ok) {
-              Alert.alert('Ads', r.message);
-            }
+            } else if (!r.ok) Alert.alert('Ads', r.message);
           }}
         />
-        <PrimaryButton
-          label="Continue"
-          style={{ marginTop: 12 }}
-          onPress={() => router.replace('/map')}
-        />
+        <PrimaryButton label="Continue" style={{ marginTop: 12 }} onPress={() => router.replace('/map')} />
       </Screen>
     );
   }
@@ -179,9 +393,7 @@ export default function PlayScreen() {
                   inventory: { ...state.inventory, revive: state.inventory.revive + 1 },
                 })
               );
-            } else {
-              Alert.alert('Ads', r.message);
-            }
+            } else Alert.alert('Ads', r.message);
           }}
         />
         <SecondaryButton
@@ -196,86 +408,218 @@ export default function PlayScreen() {
     );
   }
 
+  const spin = diceAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '420deg'] });
+  const hop = diceAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, -16, 0] });
+
   return (
-    <Screen scroll contentStyle={{ paddingBottom: 48 }}>
-      <BackRow
-        title={level.name}
-        onBack={() => router.back()}
-        right={
+    <Screen contentStyle={{ paddingBottom: 8 }}>
+      <View style={styles.topBar}>
+        <Pressable onPress={() => router.back()} style={styles.pause}>
+          <Text style={styles.pauseText}>Ⅱ</Text>
+        </Pressable>
+        <View style={styles.titleGlass}>
+          <Text style={styles.titleName} numberOfLines={1}>
+            {level.name}
+          </Text>
+          <Text style={styles.titleObj} numberOfLines={2}>
+            {level.objective}
+          </Text>
+        </View>
+        <View style={styles.statsCol}>
           <Text style={styles.hearts}>{'♥'.repeat(state.hearts)}</Text>
-        }
-      />
-      <Body muted>
-        Turn {state.turn} · Moves {state.movesLeft || '—'} · Gems {state.gemsCollected}/{state.gemsTotal}
-      </Body>
-      <Body style={{ marginVertical: 6 }}>{state.message}</Body>
-
-      <BoardView state={state} onSelect={onSelect} />
-
-      <View style={styles.actions}>
-        <PrimaryButton
-          label="ROLL THE DICE"
-          onPress={() => setState(rollDice(state))}
-          disabled={state.phase !== 'ready'}
-        />
-        <View style={styles.row}>
-          <SecondaryButton
-            label={`Reroll (${state.inventory.reroll})`}
-            onPress={() => {
-              if (state.inventory.reroll <= 0) {
-                const r = watchAd('freeReroll');
-                if (r.ok) {
-                  setState(
-                    useReroll({
-                      ...state,
-                      inventory: { ...state.inventory, reroll: 1 },
-                    })
-                  );
-                } else Alert.alert('Ads', r.message);
-              } else setState(useReroll(state));
-            }}
-            style={styles.half}
-          />
-          <SecondaryButton
-            label={`Shield (${state.inventory.shield})`}
-            onPress={() => setState(useShield(state))}
-            style={styles.half}
-          />
+          <Text style={styles.gems}>
+            ★ {state.gemsCollected}/{state.gemsTotal}
+          </Text>
         </View>
-        <View style={styles.row}>
-          <SecondaryButton
-            label={`+2 (${state.inventory.moves})`}
-            onPress={() => setState(useExtraMoves(state))}
-            style={styles.half}
-          />
-          <SecondaryButton
-            label={`Lucky (${state.inventory.lucky})`}
-            onPress={() => setState(useLucky(state))}
-            style={styles.half}
-          />
-        </View>
-        {(state.shieldActive || state.exitLocked) && (
-          <Panel style={{ marginTop: 8, paddingVertical: 10 }}>
-            {state.shieldActive && <Body>Shield active</Body>}
-            {state.exitLocked && (
-              <Body>
-                EXIT locked · switches {state.switchesPressed}/{state.switchTotal}
-              </Body>
-            )}
-          </Panel>
-        )}
       </View>
+
+      <Body style={styles.msg}>{state.message}</Body>
+
+      <BoardView
+        state={state}
+        onSelect={onSelect}
+        visualPip={visualPip}
+        floating={floating}
+      />
+
+      <View style={styles.bottomBar}>
+        <Animated.View
+          style={[
+            styles.die,
+            rolling && { transform: [{ translateY: hop }, { rotate: spin }] },
+          ]}
+        >
+          <Text style={styles.dieFace}>{diceFace}</Text>
+        </Animated.View>
+
+        <View style={{ flex: 1 }}>
+          {state.phase === 'ready' ? (
+            <ChubbyButton label="ROLL THE DICE" onPress={doRoll} disabled={busy} />
+          ) : (
+            <View style={styles.hintBox}>
+              <Text style={styles.hintTitle}>Tap a glowing tile</Text>
+              <Text style={styles.hintMoves}>Moves left: {state.movesLeft}</Text>
+            </View>
+          )}
+          <View style={styles.orbs}>
+            <PowerOrb
+              label="↺"
+              count={state.inventory.reroll}
+              onPress={() => {
+                SoundBus.click(sfx);
+                if (state.inventory.reroll <= 0) {
+                  const r = watchAd('freeReroll');
+                  if (r.ok) setState(useReroll({ ...state, inventory: { ...state.inventory, reroll: 1 } }));
+                  else Alert.alert('Ads', r.message);
+                } else setState(useReroll(state));
+              }}
+            />
+            <PowerOrb
+              label="🛡"
+              count={state.inventory.shield}
+              onPress={() => {
+                SoundBus.click(sfx);
+                setState(useShield(state));
+              }}
+            />
+            <PowerOrb
+              label="+2"
+              count={state.inventory.moves}
+              onPress={() => {
+                SoundBus.click(sfx);
+                setState(useExtraMoves(state));
+              }}
+            />
+            <PowerOrb
+              label="✧"
+              count={state.inventory.teleport}
+              onPress={() => {
+                SoundBus.click(sfx);
+                if (state.inventory.teleport <= 0) {
+                  Alert.alert('Teleport', 'No Teleport Boosts left.');
+                  return;
+                }
+                setTeleportArmed(true);
+                Alert.alert('Teleport armed', 'Tap any walkable tile within 4 steps.');
+              }}
+            />
+            <PowerOrb
+              label="✚"
+              count={state.inventory.revive}
+              onPress={() => SoundBus.click(sfx)}
+            />
+          </View>
+        </View>
+      </View>
+
+      {(state.shieldActive || state.exitLocked || teleportArmed) && (
+        <Panel style={{ marginTop: 8, paddingVertical: 8 }}>
+          {teleportArmed && <Body>Teleport armed — tap a tile</Body>}
+          {state.shieldActive && <Body>Shield active</Body>}
+          {state.exitLocked && (
+            <Body>
+              EXIT locked · switches {state.switchesPressed}/{state.switchTotal}
+            </Body>
+          )}
+        </Panel>
+      )}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  hearts: {
-    color: colors.danger,
-    fontSize: 16,
-    fontFamily: 'Fredoka_600SemiBold',
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
   },
-  actions: { marginTop: 14, gap: 10 },
-  row: { flexDirection: 'row', gap: 10 },
-  half: { flex: 1 },
+  pause: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderBottomWidth: 4,
+    borderBottomColor: 'rgba(0,0,0,0.12)',
+  },
+  pauseText: { fontFamily: 'Fredoka_700Bold', fontSize: 16, color: colors.ink },
+  titleGlass: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.62)',
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#fff',
+  },
+  titleName: { fontFamily: 'Fredoka_700Bold', fontSize: 16, color: colors.ink },
+  titleObj: { fontFamily: 'Nunito_500Medium', fontSize: 11, color: colors.ink, opacity: 0.75 },
+  statsCol: { alignItems: 'flex-end' },
+  hearts: { color: colors.danger, fontFamily: 'Fredoka_700Bold', fontSize: 14 },
+  gems: { fontFamily: 'Fredoka_600SemiBold', color: '#E8A800', fontSize: 13 },
+  msg: { textAlign: 'center', marginBottom: 8, minHeight: 20 },
+  bottomBar: {
+    marginTop: 12,
+    backgroundColor: '#FFF4D9',
+    borderRadius: radii.panel,
+    borderWidth: 3,
+    borderColor: '#fff',
+    padding: 12,
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+  },
+  die: {
+    width: 64,
+    height: 64,
+    borderRadius: 16,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderBottomWidth: 5,
+    borderBottomColor: 'rgba(0,0,0,0.15)',
+  },
+  dieFace: { fontFamily: 'Fredoka_700Bold', fontSize: 28, color: colors.ink },
+  chubby: {
+    borderRadius: 22,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderBottomWidth: 5,
+    borderBottomColor: 'rgba(0,0,0,0.18)',
+  },
+  chubbyText: { fontFamily: 'Fredoka_700Bold', fontSize: 16, color: colors.ink },
+  hintBox: {
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    borderRadius: 16,
+    padding: 12,
+  },
+  hintTitle: { fontFamily: 'Fredoka_600SemiBold', color: colors.ink },
+  hintMoves: { fontFamily: 'Nunito_500Medium', color: colors.ink, marginTop: 2 },
+  orbs: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  orb: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#7B3FE4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderBottomWidth: 4,
+    borderBottomColor: 'rgba(0,0,0,0.2)',
+  },
+  orbLabel: { color: '#fff', fontFamily: 'Fredoka_700Bold', fontSize: 14 },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#7B3FE4',
+    borderWidth: 2,
+    borderColor: '#fff',
+    borderRadius: 10,
+    minWidth: 18,
+    paddingHorizontal: 3,
+    alignItems: 'center',
+  },
+  badgeText: { color: '#fff', fontSize: 10, fontFamily: 'Fredoka_700Bold' },
 });

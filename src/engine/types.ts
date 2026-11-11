@@ -51,6 +51,7 @@ export type GloomState = {
   stunned: number;
   summons: number;
   isMinion?: boolean;
+  lastRoll?: number | null;
 };
 
 export type InventoryRuntime = {

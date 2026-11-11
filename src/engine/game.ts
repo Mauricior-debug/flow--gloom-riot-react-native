@@ -352,38 +352,57 @@ export function useTeleportBoost(state: GameState, target: Pos): GameState {
   applyEnterEffects(next, from, target);
   applyLanding(next, from, target);
   if (next.phase === 'won' || next.phase === 'lost') return next;
-  return afterPipMoved(next);
+  return afterPipMoved(next).final;
 }
 
 export function chooseMove(state: GameState, target: Pos): GameState {
-  if (state.phase !== 'choosing') return state;
-  if (!state.reachable.some((p) => same(p, target))) return state;
+  const sim = simulateWalk(state, target);
+  if (!sim) return state;
+  return sim.final;
+}
+
+/** Intermediate pip steps for animated walking, then final after glooms. */
+export function simulateWalk(
+  state: GameState,
+  target: Pos
+): {
+  path: Pos[];
+  steps: GameState[];
+  gloomFrames: GameState[];
+  final: GameState;
+} | null {
+  if (state.phase !== 'choosing') return null;
+  if (!state.reachable.some((p) => same(p, target))) return null;
   const path = findPathCost(state, state.pip, target, state.movesLeft, false);
-  if (!path || path.length < 2) return state;
+  if (!path || path.length < 2) return null;
 
   let next = cloneState(state);
   next.phase = 'moving';
   next.pathQueue = path.slice(1);
+  const steps: GameState[] = [];
 
-  // Walk step by step for effects
   for (const step of path.slice(1)) {
     const prev = { ...next.pip };
     destroyCrumbly(next, prev);
     const dir = { r: step.r - prev.r, c: step.c - prev.c };
     applyEnterEffects(next, prev, step);
-    if ((next.phase as GameState['phase']) === 'lost') return next;
+    if ((next.phase as GameState['phase']) === 'lost') {
+      steps.push(cloneState(next));
+      return { path: path.slice(1), steps, gloomFrames: [], final: next };
+    }
     applyLanding(next, prev, step, dir);
-    if ((next.phase as GameState['phase']) === 'won' || (next.phase as GameState['phase']) === 'lost') return next;
+    steps.push(cloneState(next));
+    if ((next.phase as GameState['phase']) === 'won' || (next.phase as GameState['phase']) === 'lost') {
+      return { path: path.slice(1), steps, gloomFrames: [], final: next };
+    }
   }
 
   next.pathQueue = [];
-  return afterPipMoved(next);
+  const { gloomFrames, final } = afterPipMoved(next);
+  return { path: path.slice(1), steps, gloomFrames, final };
 }
 
-function afterPipMoved(state: GameState): GameState {
-  if (state.phase === 'won' || state.phase === 'lost') return state;
-  state.phase = 'gloom';
-  state = runGlooms(state);
+function finishGloomPhase(state: GameState): GameState {
   if (state.phase === 'won' || state.phase === 'lost') return state;
   state.gloomBonusNext = 0;
   state.luckyActive = false;
@@ -397,23 +416,39 @@ function afterPipMoved(state: GameState): GameState {
   return state;
 }
 
+function afterPipMoved(state: GameState): { gloomFrames: GameState[]; final: GameState } {
+  if (state.phase === 'won' || state.phase === 'lost') {
+    return { gloomFrames: [], final: state };
+  }
+  state.phase = 'gloom';
+  const gloomFrames: GameState[] = [];
+  state = runGlooms(state, gloomFrames);
+  const final = finishGloomPhase(state);
+  return { gloomFrames, final };
+}
+
 function auraKinds(kind: string) {
   return ['brute', 'gloomKing', 'frostTitan', 'magma', 'magmaMonarch'].includes(kind);
 }
 
-function runGlooms(state: GameState): GameState {
+function runGlooms(state: GameState, frames?: GameState[]): GameState {
   const exit = findExit(state);
+  const pushFrame = () => {
+    if (frames) frames.push(cloneState(state));
+  };
 
   for (const g of state.glooms) {
     if (state.phase === 'lost' || state.phase === 'won') break;
     if (g.stunned > 0) {
       g.stunned -= 1;
+      g.lastRoll = null;
       continue;
     }
 
     // Frost titan stomp every other turn
     if (g.kind === 'frostTitan' && state.turn % 2 === 0) {
       frostStomp(state, g.pos);
+      pushFrame();
     }
 
     // Summons
@@ -437,9 +472,11 @@ function runGlooms(state: GameState): GameState {
           stunned: 1,
           summons: 0,
           isMinion: true,
+          lastRoll: null,
         });
         state.message =
           g.kind === 'magmaMonarch' ? 'Monarch summoned Ember!' : 'King summoned a minion!';
+        pushFrame();
       }
     }
 
@@ -450,6 +487,7 @@ function runGlooms(state: GameState): GameState {
     }
     diceMax += state.gloomBonusNext;
     const steps = randInt(diceMin, diceMax);
+    g.lastRoll = steps;
 
     const teammateBlocks = new Set(
       state.glooms.filter((o) => o.id !== g.id).map((o) => key(o.pos))
@@ -473,16 +511,17 @@ function runGlooms(state: GameState): GameState {
     }
 
     if (target) {
-      // Stop before teammate tile
+      // Stop before teammate tile — step one tile at a time for animation frames
       const path = findPathCost(state, g.pos, target, steps, true, new Set());
       if (path) {
-        let dest = g.pos;
         for (const step of path.slice(1)) {
           if (teammateBlocks.has(key(step))) break;
-          dest = step;
+          g.pos = step;
+          pushFrame();
         }
-        g.pos = dest;
       }
+    } else {
+      pushFrame();
     }
 
     // Catch Pip?
@@ -491,17 +530,12 @@ function runGlooms(state: GameState): GameState {
         if (!state.shieldActive) state.inventory.shield -= 1;
         state.shieldActive = false;
         g.stunned = Math.max(g.stunned, 1);
-        // gloom stays where it was — already on pip tile; move it back one if possible
-        const retreat = neighbors(g.pos).find(
-          (n) => isWalkable(state, n, true) && !occupiedByGloom(state, n, g.id)
-        );
-        // Keep gloom on tile but stun; brief says stays where it was before catch attempt
-        // Interpret: gloom does not occupy pip after shield — stay on previous
-        // We already moved onto pip; revert one step along path if possible
         state.message = 'Shield saved Pip!';
+        pushFrame();
       } else {
         state.phase = 'lost';
         state.message = 'Caught by a gloom!';
+        pushFrame();
         return state;
       }
     }
@@ -512,11 +546,13 @@ function runGlooms(state: GameState): GameState {
       dist(g.pos, state.pip) <= 2
     ) {
       shovePip(state, exit);
+      pushFrame();
     }
 
     // Aura damage
     if (auraKinds(g.kind) && dist(g.pos, state.pip) === 1) {
       hurt(state, 1, `${g.kind} aura!`);
+      pushFrame();
       if ((state.phase as GameState['phase']) === 'lost') return state;
     }
   }
