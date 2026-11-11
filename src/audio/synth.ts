@@ -1,10 +1,14 @@
-import { Audio } from 'expo-av';
+import {
+  createAudioPlayer,
+  setAudioModeAsync,
+  type AudioPlayer,
+} from 'expo-audio';
 import * as Haptics from 'expo-haptics';
 
 type ToneKind = 'sine' | 'triangle';
 
 let audioReady = false;
-const cache = new Map<string, Audio.Sound>();
+const cache = new Map<string, AudioPlayer>();
 
 function clamp01(n: number) {
   return Math.max(0, Math.min(1, n));
@@ -53,7 +57,6 @@ function encodeWav(
     const phase = 2 * Math.PI * freq * t;
     let sample =
       kind === 'sine' ? Math.sin(phase) : 2 * Math.abs(2 * ((t * freq) % 1) - 1) - 1;
-    // short envelope
     const local = i % noteLen;
     const attack = Math.min(1, local / 80);
     const release = Math.min(1, (noteLen - local) / 200);
@@ -66,7 +69,6 @@ function encodeWav(
   let binary = '';
   for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
   if (typeof globalThis.btoa === 'function') return globalThis.btoa(binary);
-  // Fallback without Node Buffer (RN / Hermes)
   const chars =
     'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
   let out = '';
@@ -86,15 +88,14 @@ function encodeWav(
 async function ensureAudio() {
   if (audioReady) return;
   try {
-    await Audio.setAudioModeAsync({
-      playsInSilentModeIOS: true,
-      allowsRecordingIOS: false,
-      staysActiveInBackground: false,
-      shouldDuckAndroid: true,
-      playThroughEarpieceAndroid: false,
+    await setAudioModeAsync({
+      playsInSilentMode: true,
+      interruptionMode: 'mixWithOthers',
+      shouldPlayInBackground: false,
+      allowsRecording: false,
     });
   } catch {
-    // ignore on web
+    // optional
   }
   audioReady = true;
 }
@@ -111,20 +112,29 @@ async function playTone(
   await ensureAudio();
   const cacheKey = `${key}:${Math.round(vol * 20)}`;
   try {
-    let sound = cache.get(cacheKey);
-    if (!sound) {
-      const b64 = encodeWav(freqs, durationMs, kind, vol);
-      const created = await Audio.Sound.createAsync(
-        { uri: `data:audio/wav;base64,${b64}` },
-        { shouldPlay: false, volume: 1 }
-      );
-      sound = created.sound;
-      cache.set(cacheKey, sound);
+    let player = cache.get(cacheKey);
+    const b64 = encodeWav(freqs, durationMs, kind, vol);
+    const uri = `data:audio/wav;base64,${b64}`;
+    if (!player) {
+      player = createAudioPlayer({ uri }, { updateInterval: 200 });
+      player.volume = 1;
+      cache.set(cacheKey, player);
+    } else {
+      try {
+        player.replace({ uri });
+      } catch {
+        player = createAudioPlayer({ uri }, { updateInterval: 200 });
+        cache.set(cacheKey, player);
+      }
     }
-    await sound.setPositionAsync(0);
-    await sound.playAsync();
+    try {
+      await player.seekTo(0);
+    } catch {
+      // first play
+    }
+    player.play();
   } catch {
-    // audio optional
+    // audio optional — never crash the game
   }
 }
 
@@ -142,6 +152,7 @@ export const SoundBus = {
     this.stopMusic();
     musicVolume = volumePct;
     musicIndex = 0;
+    if (musicVolume <= 0) return;
     musicTimer = setInterval(() => {
       const note = MUSIC_NOTES[musicIndex % MUSIC_NOTES.length];
       musicIndex += 1;
